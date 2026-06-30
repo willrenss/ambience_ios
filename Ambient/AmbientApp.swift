@@ -1,0 +1,21 @@
+import SwiftUI
+
+@main
+struct AmbientApp: App {
+    @State private var appState = AppState()
+
+    init() {
+        // Sync APIClient with the user's saved URL at launch.
+        // Task { @MainActor in } guarantees UserDefaults access runs on MainActor (iOS 18 SDK).
+        Task { @MainActor in
+            await APIClient.shared.updateBaseURL(ServerConfig.currentURL)
+        }
+    }
+
+    var body: some Scene {
+        WindowGroup {
+            RootView()
+                .environment(appState)
+        }
+    }
+}
