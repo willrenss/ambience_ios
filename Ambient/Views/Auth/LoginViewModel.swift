@@ -3,10 +3,6 @@ import Foundation
 
 @Observable
 @MainActor
-<<<<<<< HEAD
-final class LoginViewModel {
-    var name: String = ""
-=======
 final class OnboardingViewModel {
     // Step 0: nickname, 1: age, 2: hometown, 3: interests
     var step: Int = 0
@@ -18,7 +14,6 @@ final class OnboardingViewModel {
     var interests: [Interest] = []
     var selectedInterestIDs: Set<UUID> = []
 
->>>>>>> c5f4022 (Iniatial Commit)
     var isLoading: Bool = false
     var errorMessage: String? = nil
 
@@ -28,14 +23,6 @@ final class OnboardingViewModel {
         self.appState = appState
     }
 
-<<<<<<< HEAD
-    func login() async {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            errorMessage = "Please enter your name."
-            return
-        }
-=======
     var ageValue: Int? { Int(ageText) }
 
     // Backend stores a real birthdate; the wizard only collects age, so we
@@ -107,19 +94,12 @@ final class OnboardingViewModel {
     private func signUp() async {
         let trimmed = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
         let town = hometown.trimmingCharacters(in: .whitespaces)
->>>>>>> c5f4022 (Iniatial Commit)
 
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
 
         do {
-<<<<<<< HEAD
-            let profile = try await AuthService.shared.login(name: trimmed)
-            appState.currentUser = profile
-        } catch {
-            errorMessage = "Could not connect. Make sure the server is running."
-=======
             let profile = try await AuthService.shared.signup(
                 nickname: trimmed,
                 birthdate: birthdateFromAge,
@@ -129,7 +109,6 @@ final class OnboardingViewModel {
             appState.currentUser = profile
         } catch {
             errorMessage = "Could not create your account. Make sure the server is running."
->>>>>>> c5f4022 (Iniatial Commit)
         }
     }
 }

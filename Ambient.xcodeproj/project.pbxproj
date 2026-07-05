@@ -400,10 +400,7 @@
 				DEVELOPMENT_TEAM = MQ5A7DVHN8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-<<<<<<< HEAD
-=======
 				INFOPLIST_FILE = Info.plist;
->>>>>>> c5f4022 (Iniatial Commit)
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Ambient Social menggunakan Bluetooth untuk mendeteksi pengguna terdekat.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Ambient Social menggunakan jaringan lokal untuk terhubung ke server.";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Ambient Social menggunakan lokasi untuk menampilkan pengguna terdekat di radar.";
@@ -414,10 +411,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-<<<<<<< HEAD
-=======
 				INFOPLIST_KEY_UIUserInterfaceStyle = Light;
->>>>>>> c5f4022 (Iniatial Commit)
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -445,10 +439,7 @@
 				DEVELOPMENT_TEAM = MQ5A7DVHN8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-<<<<<<< HEAD
-=======
 				INFOPLIST_FILE = Info.plist;
->>>>>>> c5f4022 (Iniatial Commit)
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Ambient Social menggunakan Bluetooth untuk mendeteksi pengguna terdekat.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Ambient Social menggunakan jaringan lokal untuk terhubung ke server.";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Ambient Social menggunakan lokasi untuk menampilkan pengguna terdekat di radar.";
@@ -459,10 +450,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-<<<<<<< HEAD
-=======
 				INFOPLIST_KEY_UIUserInterfaceStyle = Light;
->>>>>>> c5f4022 (Iniatial Commit)
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

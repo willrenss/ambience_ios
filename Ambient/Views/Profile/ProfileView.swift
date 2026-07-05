@@ -1,8 +1,5 @@
 import SwiftUI
-<<<<<<< HEAD
-=======
 import NearbyInteraction
->>>>>>> c5f4022 (Iniatial Commit)
 
 struct ProfileView: View {
     @Environment(AppState.self) private var appState
@@ -11,15 +8,12 @@ struct ProfileView: View {
     @State private var notificationsEnabled: Bool = false
     @State private var serverURL: String = ServerConfig.currentURL
 
-<<<<<<< HEAD
-=======
     @AppStorage("haptics_enabled") private var hapticsEnabled: Bool = true
     @AppStorage("uwb_enabled")     private var uwbEnabled: Bool = true
     @State private var uwbPermissionDenied = false
 
     private let uwbSupported = NISession.deviceCapabilities.supportsPreciseDistanceMeasurement
 
->>>>>>> c5f4022 (Iniatial Commit)
     var body: some View {
         List {
             if let user = viewModel?.user {
@@ -36,15 +30,9 @@ struct ProfileView: View {
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(user.displayName)
-<<<<<<< HEAD
-                                .font(.headline)
-                            Text("Member")
-                                .font(.subheadline)
-=======
                                 .font(.titleMedium)
                             Text("Member")
                                 .font(.bodyMedium)
->>>>>>> c5f4022 (Iniatial Commit)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -57,8 +45,6 @@ struct ProfileView: View {
             }
 
             Section {
-<<<<<<< HEAD
-=======
                 Toggle(isOn: $hapticsEnabled) {
                     Label("Haptic & Sound Feedback", systemImage: "waveform")
                 }
@@ -85,7 +71,6 @@ struct ProfileView: View {
             }
 
             Section {
->>>>>>> c5f4022 (Iniatial Commit)
                 HStack {
                     Text("Server URL")
                         .foregroundStyle(.secondary)
@@ -99,11 +84,7 @@ struct ProfileView: View {
                 Text("Developer")
             } footer: {
                 Text("On device: set to your Mac's local IP. Tap elsewhere to save.")
-<<<<<<< HEAD
-                    .font(.caption)
-=======
                     .font(.labelSmall)
->>>>>>> c5f4022 (Iniatial Commit)
             }
 
             Section("Accessibility") {
@@ -138,22 +119,16 @@ struct ProfileView: View {
                 viewModel = ProfileViewModel(appState: appState)
             }
             notificationsEnabled = UserDefaults.standard.bool(forKey: "notifications_enabled")
-<<<<<<< HEAD
-=======
             uwbPermissionDenied = NearbyInteractionService.shared.isPermissionDenied
->>>>>>> c5f4022 (Iniatial Commit)
         }
         .onChange(of: notificationsEnabled) { _, newValue in
             UserDefaults.standard.set(newValue, forKey: "notifications_enabled")
         }
-<<<<<<< HEAD
-=======
         .onChange(of: uwbEnabled) { _, newValue in
             Task { @MainActor in
                 NearbyInteractionService.shared.isUWBEnabled = newValue
             }
         }
->>>>>>> c5f4022 (Iniatial Commit)
         .onChange(of: serverURL) { _, newValue in
             let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty, URL(string: trimmed) != nil else { return }

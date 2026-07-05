@@ -9,15 +9,6 @@ final class NearbyInteractionService: NSObject {
     private(set) var ownToken: NIDiscoveryToken?
     private var tokenContinuation: CheckedContinuation<NIDiscoveryToken?, Never>?
 
-<<<<<<< HEAD
-    private var peerSessions: [UUID: NISession] = [:]
-    private(set) var niResults: [UUID: (distance: Float, direction: Float?)] = [:]
-    private var lastNIError: String? = nil
-
-    // Typed callbacks — data is passed directly so callers don't need a MainActor hop
-    // to re-read niResults. Called on MainActor; callers Task-hop to their own actor.
-    var onNIUpdate:    (@Sendable (_ peerID: UUID, _ distance: Float, _ direction: Float?) -> Void)?
-=======
     // (token: peer's NIDiscoveryToken, userID) — ownSession is run with each peer's token.
     // Using ownSession (the session that generated ownToken) is required: the peer device
     // configured ITS session using OUR ownToken, so only ownSession can respond to ranging.
@@ -29,7 +20,6 @@ final class NearbyInteractionService: NSObject {
     // Typed callbacks — data is passed directly so callers don't need a MainActor hop
     // to re-read niResults. Called on MainActor; callers Task-hop to their own actor.
     var onNIUpdate:    (@Sendable (_ peerID: UUID, _ distance: Float, _ direction: Float?, _ elevation: Float?) -> Void)?
->>>>>>> c5f4022 (Iniatial Commit)
     var onNIRemove:    (@Sendable (_ peerID: UUID) -> Void)?
     // Fires when token arrives AFTER prepare() already timed out, so caller can re-upload presence
     var onTokenReady:  (@Sendable () -> Void)?
@@ -38,8 +28,6 @@ final class NearbyInteractionService: NSObject {
 
     // MARK: - Own session
 
-<<<<<<< HEAD
-=======
     // Read/write the user's UWB preference; disabling immediately invalidates the session.
     var isUWBEnabled: Bool {
         get { UserDefaults.standard.object(forKey: "uwb_enabled") as? Bool ?? true }
@@ -62,7 +50,6 @@ final class NearbyInteractionService: NSObject {
         lastNIError = nil
     }
 
->>>>>>> c5f4022 (Iniatial Commit)
     var debugStatus: String {
         let caps = NISession.deviceCapabilities
         if !caps.supportsPreciseDistanceMeasurement { return "UWB: not supported" }
@@ -73,25 +60,15 @@ final class NearbyInteractionService: NSObject {
             let angle = r.direction.map { String(format: "%+.0f°", $0 * 180 / .pi) } ?? "?"
             return "\(dist)m \(angle)"
         }.joined(separator: " ")
-<<<<<<< HEAD
-        var s = "UWB:\(dirCap) \(tok) s=\(peerSessions.count) [\(details)]"
-=======
         var s = "UWB:\(dirCap) \(tok) s=\(peerTokenMap.count) [\(details)]"
->>>>>>> c5f4022 (Iniatial Commit)
         if let err = lastNIError { s += " ⚠️\(err)" }
         return s
     }
 
     func prepare() async -> NIDiscoveryToken? {
-<<<<<<< HEAD
-        guard NISession.deviceCapabilities.supportsPreciseDistanceMeasurement else {
-            return nil
-        }
-=======
         guard NISession.deviceCapabilities.supportsPreciseDistanceMeasurement,
               isUWBEnabled
         else { return nil }
->>>>>>> c5f4022 (Iniatial Commit)
         if let token = ownToken { return token }
         return await withCheckedContinuation { cont in
             tokenContinuation = cont
@@ -120,17 +97,6 @@ final class NearbyInteractionService: NSObject {
     // MARK: - Peer sessions
 
     func startPeerSession(peerUserID: UUID, tokenBase64: String) {
-<<<<<<< HEAD
-        guard peerSessions[peerUserID] == nil,
-              let data = Data(base64Encoded: tokenBase64),
-              let peerToken = try? NSKeyedUnarchiver.unarchivedObject(
-                  ofClass: NIDiscoveryToken.self, from: data)
-        else { return }
-
-        let session = NISession()
-        session.delegate = self
-        peerSessions[peerUserID] = session
-=======
         guard let data = Data(base64Encoded: tokenBase64),
               let peerToken = try? NSKeyedUnarchiver.unarchivedObject(
                   ofClass: NIDiscoveryToken.self, from: data),
@@ -148,7 +114,6 @@ final class NearbyInteractionService: NSObject {
         // Run ownSession with this peer's token. ownSession holds ownToken (which the peer
         // has already configured their session with). Calling run() with a new peer config
         // adds the peer to the running session rather than replacing existing peers (iOS 16+).
->>>>>>> c5f4022 (Iniatial Commit)
         session.run(NINearbyPeerConfiguration(peerToken: peerToken))
     }
 
@@ -158,12 +123,7 @@ final class NearbyInteractionService: NSObject {
         ownToken = nil
         tokenContinuation?.resume(returning: nil)
         tokenContinuation = nil
-<<<<<<< HEAD
-        peerSessions.values.forEach { $0.invalidate() }
-        peerSessions.removeAll()
-=======
         peerTokenMap.removeAll()
->>>>>>> c5f4022 (Iniatial Commit)
         niResults.removeAll()
         lastNIError = nil
         onNIUpdate   = nil
@@ -195,20 +155,6 @@ extension NearbyInteractionService: NISessionDelegate {
     nonisolated func session(_ session: NISession,
                              didUpdate nearbyObjects: [NINearbyObject]) {
         Task { @MainActor in
-<<<<<<< HEAD
-            guard let peerID = self.peerSessions.first(where: { $0.value === session })?.key,
-                  let object = nearbyObjects.first else { return }
-
-            let dist = object.distance.map { Float($0) }
-                ?? self.niResults[peerID]?.distance ?? 1.0
-
-            let bearing: Float? = object.direction.map { dir in
-                Float(atan2(Double(dir.x), Double(-dir.z)))
-            }
-            self.niResults[peerID] = (dist, bearing)
-            // Pass data directly — no caller needs to re-read niResults via MainActor hop
-            self.onNIUpdate?(peerID, dist, bearing)
-=======
             guard session === self.ownSession else { return }
             for object in nearbyObjects {
                 guard let peerID = self.peerTokenMap
@@ -228,7 +174,6 @@ extension NearbyInteractionService: NISessionDelegate {
                 self.niResults[peerID] = (dist, bearing, elevation)
                 self.onNIUpdate?(peerID, dist, bearing, elevation)
             }
->>>>>>> c5f4022 (Iniatial Commit)
         }
     }
 
@@ -236,12 +181,6 @@ extension NearbyInteractionService: NISessionDelegate {
                              didRemove nearbyObjects: [NINearbyObject],
                              reason: NINearbyObject.RemovalReason) {
         Task { @MainActor in
-<<<<<<< HEAD
-            guard let peerID = self.peerSessions.first(where: { $0.value === session })?.key
-            else { return }
-            self.niResults.removeValue(forKey: peerID)
-            self.onNIRemove?(peerID)
-=======
             guard session === self.ownSession else { return }
             for object in nearbyObjects {
                 guard let idx = self.peerTokenMap
@@ -252,21 +191,11 @@ extension NearbyInteractionService: NISessionDelegate {
                 self.niResults.removeValue(forKey: peerID)
                 self.onNIRemove?(peerID)
             }
->>>>>>> c5f4022 (Iniatial Commit)
         }
     }
 
     nonisolated func session(_ session: NISession, didInvalidateWith error: Error) {
         let errMsg = (error as NSError).localizedDescription
-<<<<<<< HEAD
-        Task { @MainActor in
-            self.lastNIError = errMsg
-            guard let peerID = self.peerSessions.first(where: { $0.value === session })?.key
-            else { return }
-            self.peerSessions.removeValue(forKey: peerID)
-            self.niResults.removeValue(forKey: peerID)
-            self.onNIRemove?(peerID)
-=======
         let permDenied = (error as? NIError)?.code == .userDidNotAllow
         Task { @MainActor in
             self.lastNIError = errMsg
@@ -277,7 +206,6 @@ extension NearbyInteractionService: NISessionDelegate {
                 self.onNIRemove?(peerID)
             }
             self.peerTokenMap.removeAll()
->>>>>>> c5f4022 (Iniatial Commit)
         }
     }
 }

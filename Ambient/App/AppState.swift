@@ -1,14 +1,6 @@
 import Observation
 import Foundation
 
-<<<<<<< HEAD
-@Observable
-final class AppState: @unchecked Sendable {
-    // @unchecked Sendable: AppState is only mutated on MainActor in practice;
-    // @Observable synthesis does not currently add Sendable conformance automatically.
-    var currentUser: UserProfile? = nil
-    var isAuthenticated: Bool { currentUser != nil }
-=======
 // Session/UserDefaults keys shared with AppIntents (which run outside the app process
 // and can only read persisted state, not @Observable memory).
 let kActiveEventIDKey  = "nowi_active_event_id"
@@ -44,5 +36,4 @@ final class AppState: @unchecked Sendable {
             UserDefaults.standard.set(focusTargetUserID?.uuidString, forKey: kFocusTargetIDKey)
         }
     }
->>>>>>> c5f4022 (Iniatial Commit)
 }

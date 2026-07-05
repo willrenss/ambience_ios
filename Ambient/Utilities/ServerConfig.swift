@@ -2,11 +2,7 @@ import Foundation
 
 // File-scope constants: unambiguously nonisolated, safe from any actor context.
 let serverURLKey     = "ambsocial_server_url"
-<<<<<<< HEAD
-let serverFallbackURL = "http://192.168.1.25:8080"
-=======
 let serverFallbackURL = "http://192.168.1.32:8080"
->>>>>>> c5f4022 (Iniatial Commit)
 
 enum ServerConfig {
     // Aliases so existing callsites don't need to change.
