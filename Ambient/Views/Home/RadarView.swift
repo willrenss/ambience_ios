@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RadarView: View {
     let users: [NearbyUser]
+<<<<<<< HEAD
     var selfLabel: String = "You"
     var onTapUser: ((NearbyUser) -> Void)? = nil
 
@@ -19,11 +20,20 @@ struct RadarView: View {
 
     private let ringCount = 3
     private let green = Color(red: 0.1, green: 1.0, blue: 0.4)
+=======
+    var onTapUser: ((NearbyUser) -> Void)? = nil
+
+    @State private var orbitDeg: Double = 0  // slow orbit for direction-unknown dots
+    @State private var pulse: CGFloat = 1.0
+
+    private let maxDistance: Float = 15.0
+>>>>>>> c5f4022 (Iniatial Commit)
 
     var body: some View {
         GeometryReader { geo in
             let side   = min(geo.size.width, geo.size.height)
             let center = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
+<<<<<<< HEAD
             let radius = side / 2 - 36
 
             ZStack {
@@ -184,12 +194,55 @@ struct RadarView: View {
             }
             .stroke(green.opacity(0.85), lineWidth: 1.5)
             .blur(radius: 0.8)
+=======
+            let radius = max(side / 2 - 24, 1)
+
+            ZStack {
+                ringOutlines(center: center, radius: radius)
+                softRings(center: center, radius: radius)
+                youDot(center: center)
+                statusLabel(center: center, radius: radius)
+                userDots(center: center, radius: radius)
+            }
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .onAppear {
+            withAnimation(.linear(duration: 10).repeatForever(autoreverses: false)) {
+                orbitDeg = 360
+            }
+            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) {
+                pulse = 1.12
+            }
+        }
+    }
+
+    // MARK: - Background layers
+
+    // Faint full-bleed circle outlines, per the reference design.
+    private func ringOutlines(center: CGPoint, radius: CGFloat) -> some View {
+        ForEach([1.0, 1.6, 2.3], id: \.self) { multiplier in
+            Circle()
+                .stroke(Color.terracotta.opacity(0.12), lineWidth: 1)
+                .frame(width: radius * 2 * multiplier, height: radius * 2 * multiplier)
+                .position(center)
+        }
+    }
+
+    // Layered soft-peach filled circles, increasingly saturated toward the center.
+    private func softRings(center: CGPoint, radius: CGFloat) -> some View {
+        ForEach(Array(zip([1.0, 0.72, 0.46, 0.24], [0.18, 0.28, 0.4, 0.55])), id: \.0) { scale, opacity in
+            Circle()
+                .fill(Color.apricot.opacity(opacity))
+                .frame(width: radius * 2 * scale, height: radius * 2 * scale)
+                .position(center)
+>>>>>>> c5f4022 (Iniatial Commit)
         }
     }
 
     private func youDot(center: CGPoint) -> some View {
         ZStack {
             Circle()
+<<<<<<< HEAD
                 .stroke(Color.accentColor.opacity(0.35), lineWidth: 1)
                 .frame(width: 36 * youPulse, height: 36 * youPulse)
                 .opacity(Double(2.4 - youPulse) / 1.4)
@@ -202,10 +255,20 @@ struct RadarView: View {
             Text(String(selfLabel.prefix(1)))
                 .font(.system(size: 7, weight: .bold))
                 .foregroundStyle(.white)
+=======
+                .fill(RadialGradient(colors: [.white, .white.opacity(0)], center: .center, startRadius: 0, endRadius: 40))
+                .frame(width: 80, height: 80)
+                .scaleEffect(pulse)
+            Circle()
+                .fill(.white)
+                .frame(width: 26, height: 26)
+                .shadow(color: Color.terracotta.opacity(0.25), radius: 6)
+>>>>>>> c5f4022 (Iniatial Commit)
         }
         .position(center)
     }
 
+<<<<<<< HEAD
     private func userDots(center: CGPoint, radius: CGFloat) -> some View {
         ForEach(Array(users.enumerated()), id: \.element.id) { index, user in
             let (pos, hasDir) = dotInfo(for: user, index: index, center: center, radius: radius)
@@ -215,10 +278,32 @@ struct RadarView: View {
                     ? .spring(response: 0.45, dampingFraction: 0.72)
                     : .linear(duration: 0),   // orbit driven by @State, no spring fighting it
                     value: pos)
+=======
+    private func statusLabel(center: CGPoint, radius: CGFloat) -> some View {
+        VStack(spacing: Spacing.xs) {
+            Image(systemName: "dot.radiowaves.left.and.right")
+                .font(.system(size: 18, weight: .semibold))
+            Text("Finding Nearby")
+                .font(.titleSmall)
+        }
+        .foregroundStyle(Color.terracotta.opacity(0.8))
+        .position(x: center.x, y: center.y + 90)
+    }
+
+    // MARK: - Blips
+
+    private func userDots(center: CGPoint, radius: CGFloat) -> some View {
+        ForEach(Array(users.enumerated()), id: \.element.id) { index, user in
+            let pos = dotPosition(for: user, index: index, center: center, radius: radius)
+            RadarBlip(user: user)
+                .position(pos)
+                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: pos)
+>>>>>>> c5f4022 (Iniatial Commit)
                 .onTapGesture { onTapUser?(user) }
         }
     }
 
+<<<<<<< HEAD
     // MARK: - Helpers
 
     private func ringLabel(ring: Int) -> String {
@@ -238,10 +323,20 @@ struct RadarView: View {
             let r = radius * 0.88
             return (CGPoint(x: center.x + sin(angle) * r,
                             y: center.y - cos(angle) * r), false)
+=======
+    private func dotPosition(for user: NearbyUser, index: Int, center: CGPoint, radius: CGFloat) -> CGPoint {
+        let offset = Double(index) * (2.0 * .pi / Double(max(users.count, 1)))
+        let angle  = (orbitDeg * .pi / 180) + offset
+
+        if !user.hasRealPosition {
+            let r = radius * 0.8
+            return CGPoint(x: center.x + sin(angle) * r, y: center.y - cos(angle) * r)
+>>>>>>> c5f4022 (Iniatial Commit)
         }
 
         let norm = CGFloat(min(user.distance / maxDistance, 1.0))
         if let d = user.direction {
+<<<<<<< HEAD
             // Real UWB direction — precise position
             return (CGPoint(x: center.x + sin(CGFloat(d)) * norm * radius,
                             y: center.y - cos(CGFloat(d)) * norm * radius), true)
@@ -352,5 +447,29 @@ private struct UserDotView: View {
     private func formatDist(_ m: Float) -> String {
         if m < 1.0 { return String(format: "%.0fcm", m * 100) }
         return String(format: "%.1fm", m)
+=======
+            return CGPoint(x: center.x + sin(CGFloat(d)) * norm * radius,
+                           y: center.y - cos(CGFloat(d)) * norm * radius)
+        }
+        let r = max(norm, 0.35) * radius
+        return CGPoint(x: center.x + sin(angle) * r, y: center.y - cos(angle) * r)
+    }
+}
+
+// Solid coral avatar bubble with the person's initial, per the reference design.
+private struct RadarBlip: View {
+    let user: NearbyUser
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Color.coral)
+                .frame(width: 48, height: 48)
+                .shadow(color: Color.terracotta.opacity(0.3), radius: 6, y: 2)
+            Text(String(user.nickname.prefix(1)).uppercased())
+                .font(.titleMedium)
+                .foregroundStyle(.white)
+        }
+>>>>>>> c5f4022 (Iniatial Commit)
     }
 }
