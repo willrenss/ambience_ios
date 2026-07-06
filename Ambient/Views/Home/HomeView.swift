@@ -19,8 +19,6 @@ struct HomeView: View {
 
             header
         }
-        .navigationBarBackButtonHidden(true)
-        .navigationBarHidden(true)
         .navigationDestination(for: UUID.self) { roomID in
             RoomView(roomID: roomID)
         }
@@ -43,7 +41,7 @@ struct HomeView: View {
         }
         .onChange(of: viewModel.radarDisarmed) { _, disarmed in
             if disarmed {
-                Task { await viewModel.leaveRadar(appState: appState) }
+                Task { await checkout() }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .mutualMatchCreated)) { note in
@@ -52,38 +50,62 @@ struct HomeView: View {
         .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
             Button("OK") { viewModel.errorMessage = nil }
         } message: { Text(viewModel.errorMessage ?? "") }
+        .toolbar(.hidden, for: .navigationBar)
     }
 
-    // Shared across both the offline and connected states, matching the reference design.
+    // MARK: - Check Out
+
+    // leaveRadar clears appState.activeEvent — MainTabView's onChange
+    // detects this and pops the maps router back to EventMapView.
+    private func checkout() async {
+        await viewModel.leaveRadar(appState: appState)
+    }
+
+    // MARK: - Header
+
     private var header: some View {
         HStack {
+            // Check Out button — clears active event and returns to Events tab
             Button {
-                Task { await viewModel.leaveRadar(appState: appState) }
+                Task { await checkout() }
             } label: {
-                Image(systemName: "chevron.left")
-                    .font(.titleMedium)
-                    .foregroundStyle(viewModel.isConnected ? Color.terracotta : .white)
-                    .frame(width: 40, height: 40)
-                    .background(.white.opacity(viewModel.isConnected ? 1 : 0.15), in: Circle())
+                HStack(spacing: 6) {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("Check Out")
+                        .font(.labelLarge)
+                }
+                .foregroundStyle(viewModel.isConnected ? Color.terracotta : .white)
+                .padding(.horizontal, Spacing.md)
+                .padding(.vertical, Spacing.sm)
+                .background(
+                    .white.opacity(viewModel.isConnected ? 1 : 0.18),
+                    in: Capsule()
+                )
             }
 
             Spacer()
 
-            HStack(spacing: Spacing.sm) {
-                headerAvatar
-                headerAvatar
+            // Event name badge
+            if let event = appState.activeEvent {
+                Text(event.name)
+                    .font(.labelSmall)
+                    .lineLimit(1)
+                    .foregroundStyle(viewModel.isConnected ? Color.terracotta : .white)
+                    .padding(.horizontal, Spacing.md)
+                    .padding(.vertical, Spacing.sm)
+                    .background(
+                        .white.opacity(viewModel.isConnected ? 1 : 0.18),
+                        in: Capsule()
+                    )
+                    .frame(maxWidth: 160)
             }
         }
         .padding(.horizontal, Spacing.lg)
         .padding(.top, Spacing.sm)
     }
 
-    private var headerAvatar: some View {
-        Image(systemName: "person.fill")
-            .foregroundStyle(viewModel.isConnected ? Color.terracotta : .white)
-            .frame(width: 40, height: 40)
-            .background(.white.opacity(viewModel.isConnected ? 1 : 0.15), in: Circle())
-    }
+    // MARK: - Connected content
 
     private var connectedContent: some View {
         ZStack(alignment: .bottom) {
@@ -144,7 +166,8 @@ struct HomeView: View {
     }
 }
 
-// Ambient radar card (design system "Sophie, 24"). No public profile — this IS the profile.
+// MARK: - RadarCardSheet
+
 private struct RadarCardSheet: View {
     let user: NearbyUser
     var onPing: () -> Void
@@ -184,16 +207,14 @@ private struct RadarCardSheet: View {
         }
     }
 
-    // BLE distance is approximate — always prefix "~" per spec.
     private var distanceLabel: String {
         if user.distance < 1 { return String(format: "~%.0f cm away", user.distance * 100) }
         return String(format: "~%.1f m away", user.distance)
     }
 }
 
-// Bottom carousel card — no profile photos exist in the data model (User is
-// nickname/birthdate/hometown only, no avatar upload), so the initial-letter
-// bubble stands in for the photo shown in the reference design.
+// MARK: - PingNotificationCard
+
 private struct PingNotificationCard: View {
     let ping: PingNotificationDTO
     var onTap: () -> Void
@@ -236,8 +257,6 @@ private struct PingNotificationCard: View {
 }
 
 private extension Date {
-    // Abbreviated relative time ("4 hr ago") matching the reference design,
-    // rather than RelativeDateTimeFormatter's unabbreviated "4 hours ago".
     var abbreviatedRelative: String {
         let seconds = max(0, Date().timeIntervalSince(self))
         switch seconds {

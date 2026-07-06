@@ -1,7 +1,7 @@
 import CoreBluetooth
 import Foundation
 
-private let kAppServiceUUID = CBUUID(string: "AC2F5D8E-3B7E-4C5D-9AB3-4F1C2D8E3A90")
+private nonisolated(unsafe) let kAppServiceUUID = CBUUID(string: "AC2F5D8E-3B7E-4C5D-9AB3-4F1C2D8E3A90")
 
 // Advertises the app's BLE presence and detects other nearby instances.
 // On discovery, fires `onNearbyAppDetected` so the caller can trigger an
@@ -15,7 +15,7 @@ final class BLEProximityTrigger: NSObject, @unchecked Sendable {
     private var peripheral: CBPeripheralManager?
     private var central: CBCentralManager?
     private let queue = DispatchQueue(label: "social.ambient.ble", qos: .utility)
-    private var lastTrigger: Date = .distantPast
+    private nonisolated(unsafe) var lastTrigger: Date = .distantPast
 
     private override init() { super.init() }
 

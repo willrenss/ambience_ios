@@ -13,11 +13,11 @@ private struct LoginRequest: Encodable, Sendable {
     let secretKey: String
 }
 
-// Keychain / UserDefaults keys — shared with AppIntents which read the token directly.
-let kAuthTokenKey  = "ambsocial_token"
-let kSecretKeyKey  = "ambsocial_secret_key"
-let kUserIDKey     = "ambsocial_user_id"
-let kNicknameKey   = "ambsocial_nickname"
+// nonisolated(unsafe): plain immutable Strings — safe to read from any actor/thread.
+nonisolated(unsafe) let kAuthTokenKey  = "ambsocial_token"
+nonisolated(unsafe) let kSecretKeyKey  = "ambsocial_secret_key"
+nonisolated(unsafe) let kUserIDKey     = "ambsocial_user_id"
+nonisolated(unsafe) let kNicknameKey   = "ambsocial_nickname"
 
 actor AuthService {
     static let shared = AuthService()

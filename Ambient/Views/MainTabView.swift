@@ -1,35 +1,32 @@
 import SwiftUI
 
 struct MainTabView: View {
-    @State private var selectedTab: AppTab = .home
+    @Environment(AppState.self) private var appState
 
-    // Each tab owns its own router so navigation stacks are independent
-    @State private var homeRouter    = NavigationRouter()
-    @State private var eventsRouter  = NavigationRouter()
-    @State private var matchesRouter = NavigationRouter()
-    @State private var profileRouter = NavigationRouter()
+    @State private var mapsRouter      = NavigationRouter()
+    @State private var bookmarksRouter = NavigationRouter()
+    @State private var profileRouter   = NavigationRouter()
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            Tab(AppTab.home.rawValue, systemImage: AppTab.home.systemImage, value: AppTab.home) {
-                NavigationStack(path: $homeRouter.path) {
-                    HomeView()
+        @Bindable var appState = appState
+
+        TabView(selection: $appState.selectedTab) {
+            Tab(AppTab.maps.rawValue, systemImage: AppTab.maps.systemImage, value: AppTab.maps) {
+                NavigationStack(path: $mapsRouter.path) {
+                    if appState.activeEvent != nil {
+                        HomeView()
+                    } else {
+                        EventMapView()
+                    }
                 }
-                .environment(homeRouter)
+                .environment(mapsRouter)
             }
 
-            Tab(AppTab.events.rawValue, systemImage: AppTab.events.systemImage, value: AppTab.events) {
-                NavigationStack(path: $eventsRouter.path) {
-                    EventsView()
-                }
-                .environment(eventsRouter)
-            }
-
-            Tab(AppTab.matches.rawValue, systemImage: AppTab.matches.systemImage, value: AppTab.matches) {
-                NavigationStack(path: $matchesRouter.path) {
+            Tab(AppTab.bookmarks.rawValue, systemImage: AppTab.bookmarks.systemImage, value: AppTab.bookmarks) {
+                NavigationStack(path: $bookmarksRouter.path) {
                     MatchesView()
                 }
-                .environment(matchesRouter)
+                .environment(bookmarksRouter)
             }
 
             Tab(AppTab.profile.rawValue, systemImage: AppTab.profile.systemImage, value: AppTab.profile) {
@@ -38,6 +35,9 @@ struct MainTabView: View {
                 }
                 .environment(profileRouter)
             }
+        }
+        .onChange(of: appState.activeEvent == nil) { _, _ in
+            mapsRouter.popToRoot()
         }
     }
 }

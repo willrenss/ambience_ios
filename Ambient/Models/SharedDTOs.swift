@@ -18,7 +18,7 @@ struct Interest: Codable, Sendable, Identifiable, Hashable {
 
 // MARK: - Events
 
-struct EventDTO: Codable, Sendable, Identifiable {
+struct EventDTO: Codable, Sendable, Identifiable, Equatable {
     let id: UUID
     let name: String
     let longitude: Double

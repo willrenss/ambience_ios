@@ -2,16 +2,24 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(AppState.self) private var appState
-    // Starts true so we never flash the onboarding wizard before we've had a
-    // chance to check for a stored session — only the account-creation path
-    // should ever be able to show OnboardingView.
     @State private var isRestoringSession = true
+    @State private var showSplash = false
 
     var body: some View {
         Group {
             if isRestoringSession {
                 Color.peach.opacity(0.35).ignoresSafeArea()
                     .overlay { ProgressView() }
+            } else if showSplash {
+                SplashView()
+                    .transition(.opacity)
+            } else if !appState.hasSeenWalkthrough {
+                WalkthroughView {
+                    withAnimation(.easeInOut(duration: 0.4)) {
+                        appState.hasSeenWalkthrough = true
+                    }
+                }
+                .transition(.opacity)
             } else if !appState.isAuthenticated {
                 OnboardingView()
             } else if !appState.hasSeenPermissionsPriming {
@@ -20,9 +28,18 @@ struct RootView: View {
                 MainTabView()
             }
         }
+        .animation(.easeInOut(duration: 0.35), value: showSplash)
+        .animation(.easeInOut(duration: 0.35), value: appState.hasSeenWalkthrough)
         .task {
             appState.currentUser = await AuthService.shared.restoreSession()
             isRestoringSession = false
+
+            // Show splash only on very first launch (walkthrough not yet seen).
+            if !appState.hasSeenWalkthrough {
+                showSplash = true
+                try? await Task.sleep(for: .seconds(1.6))
+                withAnimation(.easeInOut(duration: 0.4)) { showSplash = false }
+            }
         }
     }
 }

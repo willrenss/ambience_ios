@@ -1,8 +1,8 @@
 import Foundation
 
-// File-scope constants: unambiguously nonisolated, safe from any actor context.
-let serverURLKey     = "ambsocial_server_url"
-let serverFallbackURL = "http://192.168.1.32:8080"
+// nonisolated(unsafe): plain immutable Strings — safe to read from any actor/thread.
+nonisolated(unsafe) let serverURLKey      = "ambsocial_server_url"
+nonisolated(unsafe) let serverFallbackURL = "http://192.168.1.32:8080"
 
 enum ServerConfig {
     // Aliases so existing callsites don't need to change.

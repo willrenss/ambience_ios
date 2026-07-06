@@ -1,11 +1,11 @@
 import Observation
 import Foundation
 
-// Session/UserDefaults keys shared with AppIntents (which run outside the app process
-// and can only read persisted state, not @Observable memory).
-let kActiveEventIDKey  = "nowi_active_event_id"
-let kFocusTargetIDKey  = "nowi_focus_target_user_id"
-let kHasSeenPermissionsPrimingKey = "nowi_has_seen_permissions_priming"
+// nonisolated(unsafe): plain immutable Strings — safe to read from any actor/thread.
+nonisolated(unsafe) let kActiveEventIDKey             = "nowi_active_event_id"
+nonisolated(unsafe) let kFocusTargetIDKey             = "nowi_focus_target_user_id"
+nonisolated(unsafe) let kHasSeenPermissionsPrimingKey = "nowi_has_seen_permissions_priming"
+nonisolated(unsafe) let kHasSeenWalkthroughKey        = "nowi_has_seen_walkthrough"
 
 @Observable
 final class AppState: @unchecked Sendable {
@@ -13,12 +13,21 @@ final class AppState: @unchecked Sendable {
     var currentUser: UserProfile? = nil
     var isAuthenticated: Bool { currentUser != nil }
 
+    // Programmatic tab switching — set from EventDetailView (check-in) and HomeView (check-out).
+    var selectedTab: AppTab = .maps
+
     // Shown once, right after account creation — gates the GPS/Bluetooth/
     // Notifications priming screens so a returning (restored-session) user
     // never sees them again.
     var hasSeenPermissionsPriming: Bool = UserDefaults.standard.bool(forKey: kHasSeenPermissionsPrimingKey) {
         didSet {
             UserDefaults.standard.set(hasSeenPermissionsPriming, forKey: kHasSeenPermissionsPrimingKey)
+        }
+    }
+
+    var hasSeenWalkthrough: Bool = UserDefaults.standard.bool(forKey: kHasSeenWalkthroughKey) {
+        didSet {
+            UserDefaults.standard.set(hasSeenWalkthrough, forKey: kHasSeenWalkthroughKey)
         }
     }
 

@@ -12,22 +12,21 @@ struct PingIntent: AppIntent {
     static var description = IntentDescription("Ping the person currently focused on your Nowi radar")
     static var openAppWhenRun: Bool = false
 
+    @MainActor
     func perform() async throws -> some IntentResult {
         guard let token = KeychainHelper.shared.load(forKey: kAuthTokenKey) else {
             return .result()
         }
-        let (serverURL, eventIDString, targetIDString) = await MainActor.run {
-            (UserDefaults.standard.string(forKey: serverURLKey) ?? serverFallbackURL,
-             UserDefaults.standard.string(forKey: kActiveEventIDKey),
-             UserDefaults.standard.string(forKey: kFocusTargetIDKey))
-        }
+        let serverURL    = UserDefaults.standard.string(forKey: serverURLKey) ?? serverFallbackURL
+        let eventIDString = UserDefaults.standard.string(forKey: kActiveEventIDKey)
+        let targetIDString = UserDefaults.standard.string(forKey: kFocusTargetIDKey)
+
         guard let eventIDString, let targetIDString,
               let targetID = UUID(uuidString: targetIDString),
               let url = URL(string: "\(serverURL)/events/\(eventIDString)/ping")
         else { return .result() }
 
-        // Tap-confirmation haptic fires immediately on Back Tap detection.
-        await MainActor.run { HapticManager.shared.play(.sendPing) }
+        HapticManager.shared.play(.sendPing)
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -39,11 +38,9 @@ struct PingIntent: AppIntent {
         if let (data, _) = try? await URLSession.shared.data(for: request),
            let resp = try? JSONDecoder().decode(PingResponse.self, from: data),
            resp.mutual {
-            await MainActor.run {
-                HapticManager.shared.play(.mutualMatch)
-                if let roomID = resp.roomID {
-                    NotificationCenter.default.post(name: .mutualMatchCreated, object: roomID)
-                }
+            HapticManager.shared.play(.mutualMatch)
+            if let roomID = resp.roomID {
+                NotificationCenter.default.post(name: .mutualMatchCreated, object: roomID)
             }
         }
         return .result()
