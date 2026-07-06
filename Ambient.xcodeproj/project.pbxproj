@@ -73,6 +73,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		3D4858A52FFB602300EAF757 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				AA001B9E2FF1B00000857A0C /* Signing.xcconfig */,
+			);
+			name = "Recovered References";
+			sourceTree = "<group>";
+		};
 		3D64B6C72FF1A94A00857A0C = {
 			isa = PBXGroup;
 			children = (
@@ -80,6 +88,7 @@
 				3D64B6E02FF1A94B00857A0C /* AmbientTests */,
 				3D64B6EA2FF1A94B00857A0C /* AmbientUITests */,
 				3D64B6D12FF1A94A00857A0C /* Products */,
+				3D4858A52FFB602300EAF757 /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
