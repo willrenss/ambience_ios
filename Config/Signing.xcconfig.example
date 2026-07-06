@@ -1,0 +1,11 @@
+// Copy this file to Signing.xcconfig and fill in your own Apple Developer values.
+// Signing.xcconfig is gitignored — each developer keeps their own local copy.
+
+// Your Apple Developer Team ID (found at developer.apple.com → Membership)
+DEVELOPMENT_TEAM = <YOUR_TEAM_ID>
+
+// Bundle identifier — usually keep the same as the project default
+PRODUCT_BUNDLE_IDENTIFIER = crossace.Ambient
+
+// Automatic lets Xcode manage provisioning profiles
+CODE_SIGN_STYLE = Automatic

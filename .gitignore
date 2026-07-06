@@ -1,0 +1,43 @@
+# --- Xcode user-specific files ---
+# These are per-developer and per-machine. Tracking them is the #1 cause
+# of "it works on my machine" problems and Xcode prompting for new identifiers.
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+
+# User-specific scheme and breakpoint settings inside .xcodeproj
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Build artifacts
+build/
+DerivedData/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+Packages/
+Package.pins
+Package.resolved
+*.xcodeproj/GeneratedSources/
+
+# CocoaPods (if used)
+Pods/
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# --- Per-developer signing (NEVER commit) ---
+# Each developer copies Signing.xcconfig.example → Signing.xcconfig
+# and fills in their own DEVELOPMENT_TEAM + PRODUCT_BUNDLE_IDENTIFIER.
+Config/Signing.xcconfig
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
