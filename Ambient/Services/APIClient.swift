@@ -12,9 +12,9 @@ actor APIClient {
     static let shared = APIClient()
 
     private var authToken: String?
-    // Stored as actor property — updated via updateBaseURL() from @MainActor startup
-    // and whenever the user saves a new server URL in Settings.
-    private var baseURLString: String = serverFallbackURL
+    // Read saved URL from UserDefaults on init; fall back to hardcoded default.
+    private var baseURLString: String =
+        UserDefaults.standard.string(forKey: serverURLKey) ?? serverFallbackURL
 
     private let decoder: JSONDecoder = {
         let d = JSONDecoder()
