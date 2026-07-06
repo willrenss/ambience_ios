@@ -107,32 +107,44 @@ private struct MapControlButton: View {
 private struct EventMapPin: View {
     let event: EventDTO
 
-    private var icon: String {
-        switch event.category {
-        case "Concerts":     return "music.mic"
-        case "Exhibitions":  return "paintbrush.fill"
-        case "Festivals":    return "sparkles"
-        case "Communities":  return "person.3.fill"
-        default:             return "mappin.fill"
-        }
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
                 Circle()
-                    .fill(Color.coral)
-                    .frame(width: 36, height: 36)
-                    .shadow(color: Color.coral.opacity(0.4), radius: 5, y: 3)
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .fill(.white)
+                    .frame(width: 52, height: 52)
+                    .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
+
+                Group {
+                    if let urlString = event.imageURL, let url = URL(string: urlString) {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .success(let img): img.resizable().scaledToFill()
+                            default: pinFallback
+                            }
+                        }
+                    } else {
+                        pinFallback
+                    }
+                }
+                .frame(width: 46, height: 46)
+                .clipShape(Circle())
             }
+            .overlay(Circle().strokeBorder(Color.coral, lineWidth: 2.5))
+
             Image(systemName: "arrowtriangle.down.fill")
-                .font(.system(size: 8))
+                .font(.system(size: 9))
                 .foregroundStyle(Color.coral)
-                .offset(y: -3)
+                .offset(y: -2)
         }
+    }
+
+    private var pinFallback: some View {
+        LinearGradient(
+            colors: [Color.apricot, Color.coral],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
 }
 
