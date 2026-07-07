@@ -28,7 +28,10 @@ final class BLERadar: NSObject, @unchecked Sendable {
     private let windowSize = 6
     private let staleAfter: TimeInterval = 6
 
-    func start(ownRadarToken: String) {
+    // Explicit nonisolated init so actors can create BLERadar without @MainActor hop.
+    nonisolated override init() { super.init() }
+
+    nonisolated func start(ownRadarToken: String) {
         queue.async { [self] in
             ownToken = ownRadarToken
             rssiWindows.removeAll()
@@ -47,7 +50,7 @@ final class BLERadar: NSObject, @unchecked Sendable {
         }
     }
 
-    func stop() {
+    nonisolated func stop() {
         queue.async { [self] in
             sweepTimer?.cancel()
             sweepTimer = nil
@@ -62,14 +65,14 @@ final class BLERadar: NSObject, @unchecked Sendable {
 
     // MARK: - Private (queue-isolated)
 
-    private func startScan() {
+    private nonisolated func startScan() {
         central?.scanForPeripherals(
             withServices: [Self.serviceUUID],
             options: [CBCentralManagerScanOptionAllowDuplicatesKey: true]
         )
     }
 
-    private func restartAdvertising() {
+    private nonisolated func restartAdvertising() {
         guard peripheral?.state == .poweredOn, !ownToken.isEmpty else { return }
         peripheral?.stopAdvertising()
         // iOS drops CBAdvertisementDataLocalNameKey from the actual advertisement the
@@ -87,7 +90,7 @@ final class BLERadar: NSObject, @unchecked Sendable {
         peripheral?.startAdvertising(advertisement)
     }
 
-    private func startSweep() {
+    private nonisolated func startSweep() {
         sweepTimer?.cancel()
         let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(deadline: .now() + 2, repeating: 2)
@@ -96,7 +99,7 @@ final class BLERadar: NSObject, @unchecked Sendable {
         sweepTimer = timer
     }
 
-    private func expireStale() {
+    private nonisolated func expireStale() {
         let now = Date()
         for (token, seen) in lastSeen where now.timeIntervalSince(seen) > staleAfter {
             lastSeen.removeValue(forKey: token)
@@ -105,7 +108,7 @@ final class BLERadar: NSObject, @unchecked Sendable {
         }
     }
 
-    private func record(token: String, rssi: Int) {
+    private nonisolated func record(token: String, rssi: Int) {
         guard token != ownToken, rssi != 127 else { return }
         var window = rssiWindows[token] ?? []
         window.append(rssi)
@@ -120,7 +123,7 @@ final class BLERadar: NSObject, @unchecked Sendable {
 // MARK: - CBPeripheralManagerDelegate
 
 extension BLERadar: CBPeripheralManagerDelegate {
-    func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager) {
+    nonisolated func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager) {
         guard peripheral.state == .poweredOn else { return }
         restartAdvertising()
     }
@@ -129,12 +132,12 @@ extension BLERadar: CBPeripheralManagerDelegate {
 // MARK: - CBCentralManagerDelegate
 
 extension BLERadar: CBCentralManagerDelegate {
-    func centralManagerDidUpdateState(_ central: CBCentralManager) {
+    nonisolated func centralManagerDidUpdateState(_ central: CBCentralManager) {
         guard central.state == .poweredOn else { return }
         startScan()
     }
 
-    func centralManager(_ central: CBCentralManager,
+    nonisolated func centralManager(_ central: CBCentralManager,
                         didDiscover peripheral: CBPeripheral,
                         advertisementData: [String: Any],
                         rssi RSSI: NSNumber) {
@@ -156,7 +159,7 @@ extension BLERadar: CBCentralManagerDelegate {
 // RSSI → approximate meters via log-distance path loss (spec Tier 2 formula).
 enum RSSIDistance {
     // TxPower: RSSI at 1m; N: path-loss exponent (higher in crowded venues).
-    static func meters(rssi: Int, txPower: Int = -59, n: Double = 2.5) -> Float {
+    nonisolated static func meters(rssi: Int, txPower: Int = -59, n: Double = 2.5) -> Float {
         Float(pow(10.0, (Double(txPower) - Double(rssi)) / (10.0 * n)))
     }
 }

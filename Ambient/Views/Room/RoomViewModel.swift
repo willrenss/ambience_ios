@@ -74,14 +74,14 @@ final class RoomViewModel {
         let ni = NearbyInteractionService.shared
         ni.onNIUpdate = { [weak self] pid, dist, dir, _ in
             guard pid == peerID else { return }
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 self?.peerDistance = dist
                 self?.peerDirection = dir
             }
         }
         ni.onNIRemove = { [weak self] pid in
             guard pid == peerID else { return }
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 self?.peerDistance = nil
                 self?.peerDirection = nil
             }

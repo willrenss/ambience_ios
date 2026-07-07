@@ -1,6 +1,17 @@
 import Observation
 import Foundation
 
+private struct StatusBody: Sendable {
+    let status: String
+}
+extension StatusBody: Encodable {
+    private enum CodingKeys: CodingKey { case status }
+    nonisolated func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(status, forKey: .status)
+    }
+}
+
 @Observable
 @MainActor
 final class HomeViewModel {
@@ -42,6 +53,12 @@ final class HomeViewModel {
     func stop() {
         usersTask?.cancel(); usersTask = nil
         eventsTask?.cancel(); eventsTask = nil
+    }
+
+    func updateStatus(_ status: String) async {
+        let trimmed = status.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        try? await APIClient.shared.patch("me", body: StatusBody(status: String(trimmed.prefix(100))))
     }
 
     // Explicit "Tap to Connect" action — this is what actually arms BLE

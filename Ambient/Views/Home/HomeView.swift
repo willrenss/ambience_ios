@@ -4,6 +4,7 @@ struct HomeView: View {
     @State private var viewModel = HomeViewModel()
     @Environment(AppState.self) private var appState
     @Environment(NavigationRouter.self) private var router
+    @Environment(\.dismiss) private var dismiss
     @State private var selectedUser: NearbyUser? = nil
 
     var body: some View {
@@ -11,8 +12,11 @@ struct HomeView: View {
             if viewModel.isConnected {
                 connectedContent
             } else {
-                TapToConnectView(isConnecting: viewModel.isConnecting) {
-                    Task { await viewModel.connect(appState: appState) }
+                TapToConnectView(isConnecting: viewModel.isConnecting) { status in
+                    Task {
+                        if let status { await viewModel.updateStatus(status) }
+                        await viewModel.connect(appState: appState)
+                    }
                 }
                 .ignoresSafeArea()
             }
@@ -65,23 +69,13 @@ struct HomeView: View {
 
     private var header: some View {
         HStack {
-            // Check Out button — clears active event and returns to Events tab
-            Button {
-                Task { await checkout() }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "rectangle.portrait.and.arrow.right")
-                        .font(.system(size: 14, weight: .semibold))
-                    Text("Check Out")
-                        .font(.labelLarge)
-                }
-                .foregroundStyle(viewModel.isConnected ? Color.terracotta : .white)
-                .padding(.horizontal, Spacing.md)
-                .padding(.vertical, Spacing.sm)
-                .background(
-                    .white.opacity(viewModel.isConnected ? 1 : 0.18),
-                    in: Capsule()
-                )
+            // Back — dismiss radar without checking out
+            Button { dismiss() } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(viewModel.isConnected ? Color.terracotta : .white)
+                    .frame(width: 36, height: 36)
+                    .background(.white.opacity(viewModel.isConnected ? 1 : 0.18), in: Circle())
             }
 
             Spacer()
@@ -94,11 +88,26 @@ struct HomeView: View {
                     .foregroundStyle(viewModel.isConnected ? Color.terracotta : .white)
                     .padding(.horizontal, Spacing.md)
                     .padding(.vertical, Spacing.sm)
-                    .background(
-                        .white.opacity(viewModel.isConnected ? 1 : 0.18),
-                        in: Capsule()
-                    )
+                    .background(.white.opacity(viewModel.isConnected ? 1 : 0.18), in: Capsule())
                     .frame(maxWidth: 160)
+            }
+
+            Spacer()
+
+            // Check Out — fully leaves the event
+            Button {
+                Task { await checkout() }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("Check Out")
+                        .font(.labelLarge)
+                }
+                .foregroundStyle(viewModel.isConnected ? Color.terracotta : .white)
+                .padding(.horizontal, Spacing.md)
+                .padding(.vertical, Spacing.sm)
+                .background(.white.opacity(viewModel.isConnected ? 1 : 0.18), in: Capsule())
             }
         }
         .padding(.horizontal, Spacing.lg)

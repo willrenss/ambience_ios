@@ -25,7 +25,7 @@ actor LocationService: NSObject {
         manager.startUpdatingLocation()
         manager.startUpdatingHeading()
         if let cached = manager.location {
-            Task { await didUpdateLocation(cached) }
+            didUpdateLocation(cached)
         }
     }
 
@@ -70,21 +70,27 @@ actor LocationService: NSObject {
     }
 }
 
-private final class LocationDelegate: NSObject, CLLocationManagerDelegate, @unchecked Sendable {
+private final class LocationDelegate: NSObject, @unchecked Sendable {
     private weak var owner: LocationService?
-    init(owner: LocationService) { self.owner = owner }
 
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+    nonisolated init(owner: LocationService) {
+        self.owner = owner
+        super.init()
+    }
+}
+
+extension LocationDelegate: CLLocationManagerDelegate {
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let loc = locations.last, let owner else { return }
         Task { await owner.didUpdateLocation(loc) }
     }
 
-    func locationManager(_ manager: CLLocationManager, didUpdateHeading heading: CLHeading) {
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateHeading heading: CLHeading) {
         guard heading.headingAccuracy >= 0 else { return }
         Task { await owner?.didUpdateHeading(heading.magneticHeading) }
     }
 
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         switch manager.authorizationStatus {
         case .authorizedWhenInUse, .authorizedAlways:
             manager.startUpdatingLocation()

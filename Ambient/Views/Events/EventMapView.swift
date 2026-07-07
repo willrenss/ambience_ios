@@ -3,9 +3,15 @@ import MapKit
 
 // MARK: - EventMapView
 
+private struct MapSheetEvent: Identifiable { let id: UUID }
+
 struct EventMapView: View {
     @State private var viewModel = EventsViewModel()
     @State private var isSearchActive = false
+    @State private var sheetEvent: MapSheetEvent?
+    @State private var isFavorited = false
+    @State private var isRadarPresented = false
+    @State private var previewEvent: EventDTO?   // event currently shown in overlay
     @State private var cameraPosition: MapCameraPosition = .region(
         MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: -6.2088, longitude: 106.8456),
@@ -15,27 +21,41 @@ struct EventMapView: View {
     @Environment(NavigationRouter.self) private var router
     @Environment(AppState.self) private var appState
 
+    private let teal = Color(hex: 0x1E7082)
+
     var body: some View {
+        @Bindable var viewModel = viewModel
+
         ZStack {
             // Full-screen map
             Map(position: $cameraPosition) {
                 UserAnnotation()
-                ForEach(viewModel.events) { event in
+                ForEach(viewModel.trending) { event in
                     Annotation("", coordinate: CLLocationCoordinate2D(
                         latitude: event.latitude,
                         longitude: event.longitude
                     )) {
-                        EventMapPin(event: event)
-                            .onTapGesture { router.push(event.id) }
+                        EventMapPin(
+                            event: event,
+                            isActive: appState.activeEvent?.id == event.id
+                        )
+                        .onTapGesture {
+                            if appState.activeEvent?.id == event.id {
+                                isRadarPresented = true
+                            } else {
+                                previewEvent = event
+                            }
+                        }
                     }
                 }
             }
             .mapStyle(.standard)
             .mapControls { }
             .ignoresSafeArea()
+            .onTapGesture { previewEvent = nil }
 
             VStack(spacing: 0) {
-                // ── Full-width search bar at top ──────────────────────────
+                // ── Search bar ─────────────────────────────────────────────
                 Button { isSearchActive = true } label: {
                     HStack(spacing: Spacing.sm) {
                         Image(systemName: "magnifyingglass")
@@ -50,55 +70,206 @@ struct EventMapView: View {
                     .padding(.horizontal, Spacing.md)
                     .padding(.vertical, 10)
                     .frame(maxWidth: .infinity)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: Radius.chip))
+                    .background(.white, in: RoundedRectangle(cornerRadius: Radius.chip))
+                    .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
                 }
                 .buttonStyle(.plain)
                 .padding(.horizontal, Spacing.lg)
                 .padding(.top, Spacing.sm)
 
+                // ── Category chips ──────────────────────────────────────────
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Spacing.sm) {
+                        ForEach(EventsViewModel.categories, id: \.self) { cat in
+                            Button {
+                                viewModel.selectedCategory = viewModel.selectedCategory == cat ? nil : cat
+                            } label: {
+                                Text(cat)
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundStyle(viewModel.selectedCategory == cat ? .white : .primary)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        viewModel.selectedCategory == cat ? teal : Color.white,
+                                        in: Capsule()
+                                    )
+                                    .shadow(color: .black.opacity(0.07), radius: 4, y: 1)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, Spacing.lg)
+                }
+                .background(Color.white.opacity(0.001))
+                .padding(.top, Spacing.sm)
+
                 Spacer()
 
-                // ── Bottom-right: map control buttons ─────────────────────
+                // ── Location button ────────────────────────────────────────
                 HStack {
                     Spacer()
-                    VStack(spacing: Spacing.sm) {
-                        MapControlButton(icon: "binoculars.fill")
-                        MapControlButton(icon: "location.north.fill")
+                    Button {
+                        cameraPosition = .region(
+                            MKCoordinateRegion(
+                                center: CLLocationCoordinate2D(latitude: -6.2088, longitude: 106.8456),
+                                span: MKCoordinateSpan(latitudeDelta: 0.06, longitudeDelta: 0.06)
+                            )
+                        )
+                    } label: {
+                        Image(systemName: "location.north.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 52, height: 52)
+                            .background(teal, in: Circle())
+                            .shadow(color: .black.opacity(0.22), radius: 8, y: 4)
                     }
                 }
                 .padding(.trailing, Spacing.lg)
                 .padding(.bottom, Spacing.lg)
             }
+
+            // Overlay card — shows preview (pin tap) or checked-in state
+            if let displayed = previewEvent ?? appState.activeEvent {
+                let isCheckedIn = appState.activeEvent?.id == displayed.id
+                VStack {
+                    Spacer()
+                    overlayCard(event: displayed, isCheckedIn: isCheckedIn)
+                        .padding(.horizontal, Spacing.lg)
+                        .padding(.bottom, 100)
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.spring(response: 0.35, dampingFraction: 0.85), value: displayed.id)
+            }
         }
-        .navigationDestination(for: UUID.self) { id in
-            EventDetailView(eventID: id)
+        .fullScreenCover(item: $sheetEvent) { e in
+            EventDetailView(eventID: e.id)
         }
-        // Search opens as a full-screen cover (slides up over everything)
         .fullScreenCover(isPresented: $isSearchActive) {
             EventSearchCover(viewModel: viewModel, onDismiss: {
                 isSearchActive = false
             })
         }
-        // When check-in succeeds, activeEvent is set → close the search cover
+        .fullScreenCover(isPresented: $isRadarPresented) {
+            HomeView()
+        }
         .onChange(of: appState.activeEvent) { _, event in
-            if event != nil { isSearchActive = false }
+            if event != nil {
+                isSearchActive = false
+                sheetEvent = nil
+                isRadarPresented = true
+            } else {
+                isRadarPresented = false
+                previewEvent = nil
+            }
         }
         .task { await viewModel.load() }
         .refreshable { await viewModel.load() }
     }
-}
 
-// MARK: - Map control button
+    // MARK: - Overlay card (unified: preview + checked-in)
 
-private struct MapControlButton: View {
-    let icon: String
+    private func overlayCard(event: EventDTO, isCheckedIn: Bool) -> some View {
+        HStack(alignment: .center, spacing: Spacing.sm) {
+            // Heart button — only in preview (not when checked in)
+            if !isCheckedIn {
+                Button { isFavorited.toggle() } label: {
+                    Image(systemName: isFavorited ? "heart.fill" : "heart")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(Color.coral)
+                        .frame(width: 48, height: 48)
+                        .background(.white, in: Circle())
+                        .shadow(color: .black.opacity(0.12), radius: 10, y: 3)
+                }
+            }
 
-    var body: some View {
-        Image(systemName: icon)
-            .font(.system(size: 15, weight: .medium))
-            .foregroundStyle(.primary)
-            .frame(width: 40, height: 40)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+            // Card — tap opens radar (if checked in) or detail (if preview)
+            Button {
+                if isCheckedIn {
+                    isRadarPresented = true
+                } else {
+                    sheetEvent = MapSheetEvent(id: event.id)
+                }
+            } label: {
+                HStack(spacing: Spacing.md) {
+                    // Thumbnail
+                    Color.clear
+                        .frame(width: 100, height: 106)
+                        .overlay {
+                            if let urlStr = event.imageURL, let url = URL(string: urlStr) {
+                                AsyncImage(url: url) { img in
+                                    img.resizable().scaledToFill()
+                                } placeholder: {
+                                    Color(.systemGray5)
+                                }
+                            } else {
+                                Color(.systemGray5)
+                            }
+                        }
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: Radius.button))
+
+                    // Info
+                    VStack(alignment: .leading, spacing: 4) {
+                        if let cat = event.category {
+                            Text(cat)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(teal)
+                        }
+                        Text(event.name)
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(2)
+                        if let loc = event.locationName {
+                            Text(loc)
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        HStack(spacing: Spacing.sm) {
+                            if isCheckedIn {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 10))
+                                    Text("Checked In")
+                                        .font(.labelSmall)
+                                }
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, Spacing.sm)
+                                .padding(.vertical, 4)
+                                .background(teal, in: Capsule())
+                            } else {
+                                SearchPriceBadge(event: event)
+                            }
+                            Spacer(minLength: 0)
+                            // Mini avatar stack
+                            HStack(spacing: -10) {
+                                ForEach(Array(event.attendeeInitials.prefix(3).enumerated()), id: \.offset) { _, ini in
+                                    Circle()
+                                        .fill(Color(.systemGray3))
+                                        .frame(width: 28, height: 28)
+                                        .overlay(Text(ini).font(.system(size: 9, weight: .bold)).foregroundStyle(.white))
+                                        .overlay(Circle().stroke(.white, lineWidth: 2))
+                                }
+                                let shown = min(event.attendeeInitials.count, 3)
+                                if event.attendeeCount > shown {
+                                    Text("+\(event.attendeeCount - shown)")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(.white)
+                                        .frame(width: 28, height: 28)
+                                        .background(teal, in: Circle())
+                                        .overlay(Circle().stroke(.white, lineWidth: 2))
+                                }
+                            }
+                        }
+                        .padding(.top, 4)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(Spacing.md)
+                .background(.white, in: RoundedRectangle(cornerRadius: Radius.card))
+                .shadow(color: .black.opacity(0.10), radius: 20, y: 6)
+            }
+            .buttonStyle(.plain)
+        }
     }
 }
 
@@ -106,56 +277,55 @@ private struct MapControlButton: View {
 
 private struct EventMapPin: View {
     let event: EventDTO
+    var isActive: Bool = false
+
+    private let teal = Color(hex: 0x1E7082)
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 4) {
             ZStack {
-                Circle()
-                    .fill(.white)
-                    .frame(width: 52, height: 52)
-                    .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
-
-                Group {
-                    if let urlString = event.imageURL, let url = URL(string: urlString) {
-                        AsyncImage(url: url) { phase in
-                            switch phase {
-                            case .success(let img): img.resizable().scaledToFill()
-                            default: pinFallback
-                            }
-                        }
-                    } else {
-                        pinFallback
-                    }
+                // Outer ring for active event
+                if isActive {
+                    Circle()
+                        .stroke(Color.coral.opacity(0.35), lineWidth: 3)
+                        .frame(width: 60, height: 60)
                 }
-                .frame(width: 46, height: 46)
-                .clipShape(Circle())
-            }
-            .overlay(Circle().strokeBorder(Color.coral, lineWidth: 2.5))
+                Circle()
+                    .fill(isActive ? Color.coral : teal)
+                    .frame(width: 48, height: 48)
+                    .shadow(color: .black.opacity(0.22), radius: 6, y: 3)
 
-            Image(systemName: "arrowtriangle.down.fill")
-                .font(.system(size: 9))
-                .foregroundStyle(Color.coral)
-                .offset(y: -2)
+                Image(systemName: isActive ? "checkmark" : categoryIcon)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+
+            Text(event.name)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
         }
     }
 
-    private var pinFallback: some View {
-        LinearGradient(
-            colors: [Color.apricot, Color.coral],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+    private var categoryIcon: String {
+        switch event.category?.lowercased() {
+        case "concerts":    return "music.note"
+        case "exhibitions": return "building.columns"
+        case "festivals":   return "sparkles"
+        case "communities": return "person.2.fill"
+        default:            return "calendar"
+        }
     }
 }
 
 // MARK: - EventSearchCover
-// Full-screen cover that slides up when the user taps the search bar.
-// Has its own NavigationStack so event detail can be pushed from within it.
 
 struct EventSearchCover: View {
     @Bindable var viewModel: EventsViewModel
     let onDismiss: () -> Void
     @FocusState private var searchFocused: Bool
+    @State private var sheetEventID: MapSheetEvent?
+    private let teal = Color(hex: 0x1E7082)
 
     var body: some View {
         NavigationStack {
@@ -190,9 +360,9 @@ struct EventSearchCover: View {
                     }
                 }
             }
-            .navigationDestination(for: UUID.self) { id in
-                EventDetailView(eventID: id)
-            }
+        }
+        .fullScreenCover(item: $sheetEventID) { e in
+            EventDetailView(eventID: e.id)
         }
         .onAppear { searchFocused = true }
         .onDisappear { viewModel.searchText = "" }
@@ -206,7 +376,7 @@ struct EventSearchCover: View {
                 ContentUnavailableView.search(text: viewModel.searchText)
             } else {
                 ForEach(viewModel.searchResults) { event in
-                    NavigationLink(value: event.id) {
+                    Button { sheetEventID = MapSheetEvent(id: event.id) } label: {
                         SearchEventRow(event: event)
                     }
                     .buttonStyle(.plain)
@@ -223,12 +393,12 @@ struct EventSearchCover: View {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 Text("Events Picked for You")
                     .font(.headlineSmall)
-                    .foregroundStyle(Color.terracotta)
+                    .foregroundStyle(teal)
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: Spacing.md) {
                         ForEach(viewModel.pickedForYou) { event in
-                            NavigationLink(value: event.id) {
+                            Button { sheetEventID = MapSheetEvent(id: event.id) } label: {
                                 SearchPickedCard(event: event)
                             }
                             .buttonStyle(.plain)
@@ -247,13 +417,13 @@ struct EventSearchCover: View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             Text("Trending Events")
                 .font(.headlineSmall)
-                .foregroundStyle(Color.terracotta)
+                .foregroundStyle(teal)
 
             categoryChips
 
             VStack(spacing: Spacing.md) {
                 ForEach(viewModel.trending) { event in
-                    NavigationLink(value: event.id) {
+                    Button { sheetEventID = MapSheetEvent(id: event.id) } label: {
                         SearchEventRow(event: event)
                     }
                     .buttonStyle(.plain)
@@ -267,22 +437,27 @@ struct EventSearchCover: View {
             HStack(spacing: Spacing.sm) {
                 Button { viewModel.selectedCategory = nil } label: {
                     Image(systemName: viewModel.selectedCategory == nil ? "heart.fill" : "heart")
-                        .foregroundStyle(viewModel.selectedCategory == nil ? .white : Color.terracotta)
+                        .foregroundStyle(viewModel.selectedCategory == nil ? .white : teal)
                         .frame(width: 36, height: 36)
                         .background(
-                            viewModel.selectedCategory == nil ? Color.coral : Color.white.opacity(0.7),
+                            viewModel.selectedCategory == nil ? teal : Color.white.opacity(0.7),
                             in: Circle()
                         )
                 }
+                Image(systemName: "line.3.horizontal.decrease")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(teal)
+                    .frame(width: 36, height: 36)
+                    .background(Color.white.opacity(0.7), in: Circle())
                 ForEach(EventsViewModel.categories, id: \.self) { cat in
                     Button { viewModel.selectedCategory = cat } label: {
                         Text(cat)
                             .font(.labelLarge)
-                            .foregroundStyle(viewModel.selectedCategory == cat ? .white : Color.terracotta)
+                            .foregroundStyle(viewModel.selectedCategory == cat ? .white : teal)
                             .padding(.horizontal, Spacing.md)
                             .padding(.vertical, Spacing.sm)
                             .background(
-                                viewModel.selectedCategory == cat ? Color.coral : Color.white.opacity(0.7),
+                                viewModel.selectedCategory == cat ? teal : Color.white.opacity(0.7),
                                 in: Capsule()
                             )
                     }
@@ -338,12 +513,12 @@ private struct SearchEventRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(event.name)
-                    .font(.titleSmall).foregroundStyle(Color.terracotta).lineLimit(1)
+                    .font(.titleSmall).foregroundStyle(Color(hex: 0x1E7082)).lineLimit(1)
                 Text(event.locationName ?? "")
-                    .font(.labelSmall).foregroundStyle(.secondary)
+                    .font(.labelSmall).foregroundStyle(Color(hex: 0x1E7082).opacity(0.6))
                 if let start = event.startAt {
                     Label(start.searchFormatted, systemImage: "calendar")
-                        .font(.labelSmall).foregroundStyle(.secondary)
+                        .font(.labelSmall).foregroundStyle(Color(hex: 0x1E7082).opacity(0.6))
                 }
             }
 
@@ -352,7 +527,7 @@ private struct SearchEventRow: View {
         }
         .padding(Spacing.md)
         .background(.white, in: RoundedRectangle(cornerRadius: Radius.card))
-        .shadow(color: Color.terracotta.opacity(0.07), radius: 6, y: 2)
+        .shadow(color: Color(hex: 0x1E7082).opacity(0.07), radius: 6, y: 2)
     }
 }
 
@@ -366,7 +541,7 @@ private struct SearchPriceBadge: View {
             .font(.labelSmall).foregroundStyle(.white)
             .lineLimit(1).minimumScaleFactor(0.8)
             .padding(.horizontal, Spacing.sm).padding(.vertical, 4)
-            .background(Color.coral, in: Capsule())
+            .background(Color(hex: 0x1E7082), in: Capsule())
     }
 
     private var label: String {

@@ -86,6 +86,12 @@ actor APIClient {
         _ = try await perform(request)
     }
 
+    func patch(_ path: String, body: some Encodable) async throws {
+        let bodyData = try encoder.encode(body)
+        let request  = try makeRequest(method: "PATCH", path: path, body: bodyData)
+        _ = try await perform(request)
+    }
+
     func delete(_ path: String) async throws {
         let request = try makeRequest(method: "DELETE", path: path)
         _ = try await perform(request)

@@ -1,6 +1,12 @@
 import Foundation
 
-private struct SignupRequest: Encodable, Sendable {
+// MARK: - Request types
+
+// Explicit nonisolated Encodable avoids the @MainActor synthesis that
+// SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor would otherwise apply, allowing
+// these types to be encoded inside any actor (e.g. APIClient).
+
+private struct SignupRequest: Sendable {
     let nickname: String
     let birthdate: Date
     let hometown: String?
@@ -8,16 +14,40 @@ private struct SignupRequest: Encodable, Sendable {
     let interestIDs: [UUID]
 }
 
-private struct LoginRequest: Encodable, Sendable {
+extension SignupRequest: Encodable {
+    private enum CodingKeys: String, CodingKey {
+        case nickname, birthdate, hometown, deviceToken, interestIDs
+    }
+    nonisolated func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(nickname, forKey: .nickname)
+        try c.encode(birthdate, forKey: .birthdate)
+        try c.encodeIfPresent(hometown, forKey: .hometown)
+        try c.encodeIfPresent(deviceToken, forKey: .deviceToken)
+        try c.encode(interestIDs, forKey: .interestIDs)
+    }
+}
+
+private struct LoginRequest: Sendable {
     let userID: UUID
     let secretKey: String
 }
 
-// nonisolated(unsafe): plain immutable Strings — safe to read from any actor/thread.
-nonisolated(unsafe) let kAuthTokenKey  = "ambsocial_token"
-nonisolated(unsafe) let kSecretKeyKey  = "ambsocial_secret_key"
-nonisolated(unsafe) let kUserIDKey     = "ambsocial_user_id"
-nonisolated(unsafe) let kNicknameKey   = "ambsocial_nickname"
+extension LoginRequest: Encodable {
+    private enum CodingKeys: String, CodingKey { case userID, secretKey }
+    nonisolated func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(userID, forKey: .userID)
+        try c.encode(secretKey, forKey: .secretKey)
+    }
+}
+
+// MARK: - Keychain keys
+
+let kAuthTokenKey  = "ambsocial_token"
+let kSecretKeyKey  = "ambsocial_secret_key"
+let kUserIDKey     = "ambsocial_user_id"
+let kNicknameKey   = "ambsocial_nickname"
 
 actor AuthService {
     static let shared = AuthService()
@@ -61,36 +91,31 @@ actor AuthService {
         }
     }
 
-    // Restore a live session from the stored JWT, or re-login via the stored secretKey.
+    // Restore session from cache instantly — no network call on startup.
+    // The token will be validated naturally on the first authenticated API call;
+    // if it's expired or the account is gone the call returns 401 and the app
+    // can sign the user out then.
     func restoreSession() async -> UserProfile? {
         let (idString, nickname) = await MainActor.run {
             (UserDefaults.standard.string(forKey: kUserIDKey),
              UserDefaults.standard.string(forKey: kNicknameKey))
         }
-        guard let idString, let userID = UUID(uuidString: idString) else { return nil }
+        guard let idString,
+              let userID = UUID(uuidString: idString),
+              let nickname else { return nil }
 
-        // Re-login via the stored secretKey is the only way to confirm the
-        // account still exists server-side (e.g. it can be gone after a dev
-        // DB reset while this device still has an old cached session).
-        if let secret = KeychainHelper.shared.load(forKey: kSecretKeyKey) {
-            if let refreshed = try? await login(userID: userID, secretKey: secret) {
-                return refreshed
-            }
-            // Login explicitly failed — the account no longer exists (or the
-            // secret is wrong). Previously this fell through to fabricate a
-            // UserProfile from cached UserDefaults data, silently "logging
-            // in" a phantom account whose JWT didn't resolve to any real
-            // row — every authenticated call after that would fail. Clear
-            // the stale session instead so the user goes back to onboarding.
-            await signOut()
-            return nil
-        }
-
-        // No secret stored (shouldn't normally happen) — fall back to the
-        // cached token only if present.
         if let token = KeychainHelper.shared.load(forKey: kAuthTokenKey) {
             await APIClient.shared.setToken(token)
-            if let nickname { return UserProfile(id: userID, nickname: nickname) }
+            return UserProfile(id: userID, nickname: nickname)
+        }
+
+        // No token cached — try re-login with the secret key (e.g. fresh install
+        // with iCloud keychain sync but no JWT yet).
+        if let secret = KeychainHelper.shared.load(forKey: kSecretKeyKey) {
+            if let profile = try? await login(userID: userID, secretKey: secret) {
+                return profile
+            }
+            await signOut()
         }
         return nil
     }

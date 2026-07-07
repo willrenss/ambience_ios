@@ -198,8 +198,7 @@ private struct PhotoSlide: View {
     }
 
     private var titleLabel: some View {
-        (Text(accentWord).foregroundStyle(Color.coral)
-            + Text(titleRest).foregroundStyle(Color.primary))
+        Text("\(Text(accentWord).foregroundStyle(Color.coral))\(Text(titleRest).foregroundStyle(Color.primary))")
             .font(.system(size: 32, weight: .bold))
     }
 }
@@ -213,8 +212,8 @@ private struct WalkthroughNavRow: View {
     let onSkip: () -> Void
     let onNext: () -> Void
 
-    private let teal       = Color(hex: 0x5B9FAE)
-    private let tealShadow = Color(hex: 0x3A7890)
+    private let teal       = Color(hex: 0x1E7082)
+    private let tealShadow = Color(hex: 0x0F4F5E)
 
     var body: some View {
         HStack(spacing: 0) {

@@ -1,11 +1,10 @@
 import Observation
 import Foundation
 
-// nonisolated(unsafe): plain immutable Strings — safe to read from any actor/thread.
-nonisolated(unsafe) let kActiveEventIDKey             = "nowi_active_event_id"
-nonisolated(unsafe) let kFocusTargetIDKey             = "nowi_focus_target_user_id"
-nonisolated(unsafe) let kHasSeenPermissionsPrimingKey = "nowi_has_seen_permissions_priming"
-nonisolated(unsafe) let kHasSeenWalkthroughKey        = "nowi_has_seen_walkthrough"
+let kActiveEventIDKey             = "nowi_active_event_id"
+let kFocusTargetIDKey             = "nowi_focus_target_user_id"
+let kHasSeenPermissionsPrimingKey = "nowi_has_seen_permissions_priming"
+let kHasSeenWalkthroughKey        = "nowi_has_seen_walkthrough"
 
 @Observable
 final class AppState: @unchecked Sendable {

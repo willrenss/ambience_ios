@@ -1,7 +1,15 @@
 import Foundation
 
-private struct PingBody: Encodable, Sendable {
+private struct PingBody: Sendable {
     let toUserID: UUID
+}
+
+extension PingBody: Encodable {
+    private enum CodingKeys: CodingKey { case toUserID }
+    nonisolated func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(toUserID, forKey: .toUserID)
+    }
 }
 
 actor PingService {
