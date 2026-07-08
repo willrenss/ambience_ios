@@ -9,8 +9,8 @@ actor LocationService: NSObject {
     private(set) var currentLocation: CLLocation?
     private(set) var headingDegrees: Double?
 
-    // Continuation stream of fresh CLLocation fixes — consumed by EventRadarService's heartbeat.
     private var locationContinuation: AsyncStream<CLLocation>.Continuation?
+    private var headingContinuation: AsyncStream<Double>.Continuation?
 
     override init() { super.init() }
 
@@ -18,14 +18,14 @@ actor LocationService: NSObject {
         let delegate = LocationDelegate(owner: self)
         locationDelegate = delegate
         manager.delegate = delegate
-        manager.desiredAccuracy = kCLLocationAccuracyBest
-        manager.distanceFilter  = kCLDistanceFilterNone
-        manager.headingFilter   = 2
+        manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
+        manager.distanceFilter  = kCLDistanceFilterNone   // setiap gerakan kecil dikirim
+        manager.headingFilter   = 1                       // update tiap 1° perubahan arah
         manager.requestWhenInUseAuthorization()
         manager.startUpdatingLocation()
         manager.startUpdatingHeading()
         if let cached = manager.location {
-            Task { await didUpdateLocation(cached) }
+            didUpdateLocation(cached)
         }
     }
 
@@ -36,6 +36,8 @@ actor LocationService: NSObject {
         headingDegrees = nil
         locationContinuation?.finish()
         locationContinuation = nil
+        headingContinuation?.finish()
+        headingContinuation = nil
     }
 
     // A stream of location fixes. Resets any prior stream.
@@ -44,6 +46,15 @@ actor LocationService: NSObject {
         return AsyncStream { continuation in
             self.locationContinuation = continuation
             if let loc = currentLocation { continuation.yield(loc) }
+        }
+    }
+
+    // A stream of compass heading updates (magnetic degrees).
+    func headingUpdates() -> AsyncStream<Double> {
+        headingContinuation?.finish()
+        return AsyncStream { continuation in
+            self.headingContinuation = continuation
+            if let h = headingDegrees { continuation.yield(h) }
         }
     }
 
@@ -67,24 +78,31 @@ actor LocationService: NSObject {
 
     func didUpdateHeading(_ degrees: Double) {
         headingDegrees = degrees
+        headingContinuation?.yield(degrees)
     }
 }
 
-private final class LocationDelegate: NSObject, CLLocationManagerDelegate, @unchecked Sendable {
+private final class LocationDelegate: NSObject, @unchecked Sendable {
     private weak var owner: LocationService?
-    init(owner: LocationService) { self.owner = owner }
 
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+    nonisolated init(owner: LocationService) {
+        self.owner = owner
+        super.init()
+    }
+}
+
+extension LocationDelegate: CLLocationManagerDelegate {
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let loc = locations.last, let owner else { return }
         Task { await owner.didUpdateLocation(loc) }
     }
 
-    func locationManager(_ manager: CLLocationManager, didUpdateHeading heading: CLHeading) {
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateHeading heading: CLHeading) {
         guard heading.headingAccuracy >= 0 else { return }
         Task { await owner?.didUpdateHeading(heading.magneticHeading) }
     }
 
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         switch manager.authorizationStatus {
         case .authorizedWhenInUse, .authorizedAlways:
             manager.startUpdatingLocation()

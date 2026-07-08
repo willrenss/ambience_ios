@@ -15,4 +15,5 @@ enum Spacing {
 enum Radius {
     static let card: CGFloat = 22
     static let chip: CGFloat = 14
+    static let button: CGFloat = 12
 }

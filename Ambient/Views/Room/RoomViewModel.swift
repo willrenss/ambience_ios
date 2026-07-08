@@ -1,5 +1,6 @@
 import Observation
 import Foundation
+import NearbyInteraction
 
 @Observable
 @MainActor
@@ -10,18 +11,28 @@ final class RoomViewModel {
     var isLoading = false
     var errorMessage: String? = nil
 
-    // UWB ranging state (Tier 3) — populated once the peer's discoveryToken arrives.
+    // WebSocket + UWB state
+    var isWSConnected: Bool = false    // true once the room WS handshake succeeds
     var peerDistance: Float? = nil
-    var peerDirection: Float? = nil
+    var isUWBSearching: Bool = false   // true after token generated, before first ranging update
+    var isInitiator: Bool = false      // current user was first pinger → UWB guest
+    // true when prepare() exhausted retries and token still nil — show Settings button in strip
+    var uwbPermissionPending: Bool = false
 
     private(set) var myUserID: UUID?
     private var streamTask: Task<Void, Never>? = nil
+    private var retryTask: Task<Void, Never>? = nil
     private var didSendToken = false
     private var currentRoomID: UUID?
+    // Buffers the peer's discovery token if it arrives before our NI session is ready
+    private var pendingPeerToken: String? = nil
     // Guards against reconnecting after the view has gone away — without this,
     // a dropped WS (backgrounding, network hiccup) silently stops delivering the
     // peer's messages and the chat looks "stuck" after the first exchange.
     private var isActive = false
+    // Local peer-to-peer token exchange (like UWBDemo) — faster and more reliable than
+    // routing tokens through the WebSocket server, and works without internet.
+    private var mcExchange: UWBTokenExchangeService?
 
     func load(id: UUID) async {
         isLoading = true
@@ -34,12 +45,22 @@ final class RoomViewModel {
 
         currentRoomID = id
         isActive = true
+        uwbLog("━━━ Room dibuka: \(id.uuidString.prefix(8)) ━━━")
 
         do {
             room = try await RoomService.shared.fetchRoom(id: id)
+            isInitiator = room?.isInitiator ?? false
             messages = try await RoomService.shared.fetchMessages(roomID: id)
+
+            let peerID = room?.peerUserID
+            // Start UWB concurrently with the WS connect — NISession must be created
+            // independently so the Nearby Interactions permission dialog appears even
+            // if the WebSocket is slow or keeps retrying. Token exchange completes
+            // via the peerConnected / resendOwnToken flow once both sides are up.
+            Task { @MainActor [weak self] in
+                await self?.startUWB(peerID: peerID)
+            }
             await connect(roomID: id)
-            await startUWB(peerID: room?.peerUserID)
         } catch {
             errorMessage = "Failed to load chat."
         }
@@ -60,7 +81,12 @@ final class RoomViewModel {
 
     func cleanup() {
         isActive = false
+        isWSConnected = false
+        didSendToken = false
+        pendingPeerToken = nil
         streamTask?.cancel(); streamTask = nil
+        retryTask?.cancel(); retryTask = nil
+        mcExchange?.stop(); mcExchange = nil
         Task {
             await RoomService.shared.disconnect()
             await MainActor.run { NearbyInteractionService.shared.stop() }
@@ -70,29 +96,90 @@ final class RoomViewModel {
     // MARK: - UWB (Tier 3)
 
     private func startUWB(peerID: UUID?) async {
-        guard let peerID else { return }
+        guard let peerID, let roomID = currentRoomID else {
+            uwbLog("⚠️ startUWB: peerID=\(peerID?.uuidString ?? "nil") roomID=\(currentRoomID?.uuidString ?? "nil") — abort")
+            return
+        }
+        uwbLog("🚀 startUWB: peer=\(peerID.uuidString.prefix(8))")
         let ni = NearbyInteractionService.shared
-        ni.onNIUpdate = { [weak self] pid, dist, dir, _ in
+        // Force a fresh session when the user explicitly opens a chat room.
+        // This creates NISession in a foreground user-interaction context, which
+        // is more reliable for triggering the iOS permission dialog than the
+        // background .task {} call in MainTabView.
+        if ni.ownToken == nil {
+            ni.retryTokenGeneration()
+        }
+
+        // Start MC-based token exchange in parallel — same approach as UWBDemo.
+        let mc = UWBTokenExchangeService()
+        mc.start(roomID: roomID)
+        mc.onPeerTokenReceived = { [weak self] tokenBase64 in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.uwbLog("📥 Peer token via MC — memanggil startPeerSession")
+                self.pendingPeerToken = tokenBase64
+                NearbyInteractionService.shared.startPeerSession(
+                    peerUserID: peerID, tokenBase64: tokenBase64)
+            }
+        }
+        mcExchange = mc
+
+        ni.onNIUpdate = { [weak self] pid, dist, _, _ in
             guard pid == peerID else { return }
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 self?.peerDistance = dist
-                self?.peerDirection = dir
+                self?.isUWBSearching = false
             }
         }
         ni.onNIRemove = { [weak self] pid in
             guard pid == peerID else { return }
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 self?.peerDistance = nil
-                self?.peerDirection = nil
             }
         }
-        // If the token arrives after our first attempt, re-send it over the room WS.
         ni.onTokenReady = { [weak self] in
-            Task { await self?.sendOwnToken() }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.retryTask?.cancel()
+                self.retryTask = nil
+                self.uwbPermissionPending = false
+                self.isUWBSearching = true
+                await self.sendOwnToken()
+                await self.applyPendingPeerToken()
+            }
         }
-        if let token = await ni.prepare() {
-            _ = token
+        if let _ = await ni.prepare() {
+            uwbLog("✅ prepare() sukses — token ready")
+            isUWBSearching = true
             await sendOwnToken()
+            await applyPendingPeerToken()
+        } else if ni.isPermissionDenied {
+            uwbLog("❌ Permission NI denied — enable di Settings > Privacy > Nearby Interactions")
+            isUWBSearching = false
+        } else if ni.isUWBEnabled {
+            // prepare() timed out (18s) tapi session masih hidup — permission belum granted.
+            // Tampilkan tombol "Buka Settings" dan retry setiap 15s di background.
+            uwbLog("⏳ prepare() timeout — tampilkan tombol Settings, retry setiap 15s...")
+            isUWBSearching = true
+            uwbPermissionPending = true
+            retryTask = Task { @MainActor [weak self] in
+                await self?.retryUWBLoop()
+            }
+        }
+    }
+
+    // Retries NISession creation every 15s until token generates or room closes.
+    // Covers the case where the iOS permission dialog appeared but wasn't responded to,
+    // or the NI framework had a transient failure. onTokenReady handles success.
+    private func retryUWBLoop() async {
+        let ni = NearbyInteractionService.shared
+        var attempt = 1
+        while isActive, !ni.isPermissionDenied, ni.ownToken == nil {
+            try? await Task.sleep(for: .seconds(15))
+            guard isActive, !ni.isPermissionDenied, ni.ownToken == nil else { break }
+            uwbLog("🔄 Retry \(attempt): buat ulang NISession (permission belum granted?)")
+            ni.retryTokenGeneration()
+            attempt += 1
         }
     }
 
@@ -102,8 +189,13 @@ final class RoomViewModel {
             NearbyInteractionService.shared.ownToken
                 .flatMap { NearbyInteractionService.encode($0) }
         }
-        guard let base64 else { return }
+        guard let base64 else {
+            uwbLog("⚠️ sendOwnToken: ownToken nil, skip")
+            return
+        }
         didSendToken = true
+        uwbLog("📤 Own token dikirim via MC + WebSocket")
+        mcExchange?.sendToken(base64)
         await RoomService.shared.sendDiscoveryToken(base64)
     }
 
@@ -112,6 +204,7 @@ final class RoomViewModel {
     private func connect(roomID: UUID) async {
         do {
             let stream = try await RoomService.shared.connectToRoom(id: roomID)
+            isWSConnected = true
             streamTask = Task { @MainActor [weak self] in
                 for await message in stream {
                     await self?.handle(message)
@@ -144,13 +237,41 @@ final class RoomViewModel {
             }
         case "discoveryToken":
             guard let peerID = room?.peerUserID else { return }
+            uwbLog("📥 Peer token via WebSocket — memanggil startPeerSession")
+            pendingPeerToken = message.payload
             await MainActor.run {
                 NearbyInteractionService.shared.startPeerSession(
                     peerUserID: peerID, tokenBase64: message.payload)
             }
+        case "peerConnected":
+            uwbLog("🔗 peerConnected event — resend token via WebSocket")
+            await resendOwnToken()
         default:
             break
         }
+    }
+
+    private func resendOwnToken() async {
+        let base64 = await MainActor.run {
+            NearbyInteractionService.shared.ownToken
+                .flatMap { NearbyInteractionService.encode($0) }
+        }
+        guard let base64 else { return }
+        await RoomService.shared.sendDiscoveryToken(base64)
+    }
+
+    private func applyPendingPeerToken() async {
+        guard let token = pendingPeerToken,
+              let peerID = room?.peerUserID else { return }
+        pendingPeerToken = nil
+        await MainActor.run {
+            NearbyInteractionService.shared.startPeerSession(
+                peerUserID: peerID, tokenBase64: token)
+        }
+    }
+
+    private func uwbLog(_ message: String) {
+        UWBLogger.shared.append("[VM] \(message)")
     }
 
     private func appendUnique(_ msg: ChatMessageDTO) {

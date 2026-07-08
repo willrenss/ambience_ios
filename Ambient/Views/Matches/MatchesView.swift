@@ -22,25 +22,52 @@ final class MatchesViewModel {
 struct MatchesView: View {
     @State private var viewModel = MatchesViewModel()
     @Environment(NavigationRouter.self) private var router
+    @Environment(AppState.self) private var appState
 
     var body: some View {
         @Bindable var router = router
 
-        ScrollView {
-            LazyVStack(spacing: Spacing.md) {
-                ForEach(viewModel.rooms) { room in
-                    Button {
-                        router.push(room.id)
-                    } label: {
-                        MatchRow(room: room)
-                    }
-                    .buttonStyle(.plain)
+        VStack(spacing: 0) {
+            // Custom header with back-to-radar button
+            HStack {
+                Button {
+                    appState.selectedTab = .maps
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(Color.terracotta)
+                        .frame(width: 44, height: 44)
                 }
+
+                Spacer()
+
+                Text("Chats")
+                    .font(.system(size: 17, weight: .semibold))
+
+                Spacer()
+
+                Color.clear.frame(width: 44, height: 44)
             }
-            .padding(Spacing.lg)
+            .padding(.horizontal, 8)
+
+            Divider().opacity(0.2)
+
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(viewModel.rooms) { room in
+                        Button {
+                            router.push(room.id)
+                        } label: {
+                            MatchRow(room: room)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.top, Spacing.sm)
+            }
         }
-        .background(Color.peach.opacity(0.2))
-        .navigationTitle("Matches")
+        .background(Color.peach.opacity(0.15).ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(for: UUID.self) { roomID in
             RoomView(roomID: roomID)
         }
@@ -48,8 +75,11 @@ struct MatchesView: View {
             if viewModel.isLoading {
                 ProgressView()
             } else if viewModel.rooms.isEmpty {
-                ContentUnavailableView("No Matches Yet", systemImage: "heart.slash",
-                    description: Text("Ping people on the radar. When they ping you back, a chat opens here."))
+                ContentUnavailableView(
+                    "No Chats Yet",
+                    systemImage: "bubble.left.and.bubble.right",
+                    description: Text("Ping people on the radar. When they ping you back, a chat opens here.")
+                )
             }
         }
         .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
@@ -60,28 +90,42 @@ struct MatchesView: View {
     }
 }
 
+// MARK: - Row
+
 private struct MatchRow: View {
     let room: RoomDTO
+
+    private let avatarSize: CGFloat = 52
+
     var body: some View {
         HStack(spacing: Spacing.md) {
+            // Avatar
             ZStack {
-                Circle().fill(Color.apricot).frame(width: 48, height: 48)
+                Circle()
+                    .fill(Color(.systemGray4))
+                    .frame(width: avatarSize, height: avatarSize)
                 Text(String(room.peerNickname.prefix(1)).uppercased())
-                    .font(.titleMedium)
-                    .foregroundStyle(Color.terracotta)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(.white)
             }
-            VStack(alignment: .leading, spacing: 2) {
+
+            // Name + preview
+            VStack(alignment: .leading, spacing: 3) {
                 Text("\(room.peerNickname), \(room.peerAge)")
-                    .font(.titleMedium)
-                    .foregroundStyle(Color.terracotta)
-                if let eventName = room.eventName {
-                    Text(eventName).font(.labelSmall).foregroundStyle(.secondary)
-                }
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                Text(room.eventName ?? "Tap to start chatting")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
-            Spacer()
-            Image(systemName: "chevron.right").font(.labelSmall).foregroundStyle(.tertiary)
+
+            Spacer(minLength: 0)
         }
-        .padding(Spacing.md)
-        .background(Color.peach, in: RoundedRectangle(cornerRadius: Radius.card))
+        .padding(.horizontal, Spacing.lg)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
     }
 }

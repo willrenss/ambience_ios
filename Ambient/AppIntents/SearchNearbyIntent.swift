@@ -40,7 +40,11 @@ struct PingIntent: AppIntent {
            resp.mutual {
             HapticManager.shared.play(.mutualMatch)
             if let roomID = resp.roomID {
-                NotificationCenter.default.post(name: .mutualMatchCreated, object: roomID)
+                NotificationCenter.default.post(
+                    name: .mutualMatchCreated,
+                    object: roomID,
+                    userInfo: ["peerUserID": targetID]
+                )
             }
         }
         return .result()

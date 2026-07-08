@@ -1,7 +1,15 @@
 import Foundation
 
-private struct SendMessageBody: Encodable, Sendable {
+private struct SendMessageBody: Sendable {
     let message: String
+}
+
+extension SendMessageBody: Encodable {
+    private enum CodingKeys: CodingKey { case message }
+    nonisolated func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(message, forKey: .message)
+    }
 }
 
 actor RoomService {

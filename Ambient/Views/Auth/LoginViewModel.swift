@@ -80,7 +80,12 @@ final class OnboardingViewModel {
     // backend rejects signup otherwise (no-interest accounts can't happen).
     func advance() async {
         guard canContinueCurrentStep else {
-            if step == 3 { errorMessage = "Pick at least one interest to continue." }
+            switch step {
+            case 0: errorMessage = "Please enter a nickname to continue."
+            case 1: errorMessage = "Please select your age group."
+            case 3: errorMessage = "Pick at least one interest to continue."
+            default: break
+            }
             return
         }
         errorMessage = nil

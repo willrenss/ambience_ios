@@ -1,11 +1,10 @@
 import Observation
 import Foundation
 
-// nonisolated(unsafe): plain immutable Strings — safe to read from any actor/thread.
-nonisolated(unsafe) let kActiveEventIDKey             = "nowi_active_event_id"
-nonisolated(unsafe) let kFocusTargetIDKey             = "nowi_focus_target_user_id"
-nonisolated(unsafe) let kHasSeenPermissionsPrimingKey = "nowi_has_seen_permissions_priming"
-nonisolated(unsafe) let kHasSeenWalkthroughKey        = "nowi_has_seen_walkthrough"
+let kActiveEventIDKey             = "nowi_active_event_id"
+let kFocusTargetIDKey             = "nowi_focus_target_user_id"
+let kHasSeenPermissionsPrimingKey = "nowi_has_seen_permissions_priming"
+let kHasSeenWalkthroughKey        = "nowi_has_seen_walkthrough"
 
 @Observable
 final class AppState: @unchecked Sendable {
@@ -38,6 +37,9 @@ final class AppState: @unchecked Sendable {
         }
     }
     var activeEvent: EventDTO? = nil
+
+    // Set by StatusIntentView — HomeView observes and auto-connects to radar.
+    var shouldAutoConnectRadar: Bool = false
 
     // The radar blip currently focused (used as the Back Tap ping target).
     var focusTargetUserID: UUID? {

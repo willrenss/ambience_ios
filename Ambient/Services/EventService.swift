@@ -1,8 +1,17 @@
 import Foundation
 
-private struct LocationBody: Encodable, Sendable {
+private struct LocationBody: Sendable {
     let latitude: Double
     let longitude: Double
+}
+
+extension LocationBody: Encodable {
+    private enum CodingKeys: CodingKey { case latitude, longitude }
+    nonisolated func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(latitude, forKey: .latitude)
+        try c.encode(longitude, forKey: .longitude)
+    }
 }
 
 actor EventService {
@@ -44,4 +53,11 @@ actor EventService {
     }
 }
 
-struct EmptyBody: Encodable, Sendable {}
+struct EmptyBody: Sendable {}
+
+extension EmptyBody: Encodable {
+    nonisolated func encode(to encoder: any Encoder) throws {
+        // Encode as `{}` — delegate to stdlib Dictionary which is not @MainActor isolated.
+        try [String: String]().encode(to: encoder)
+    }
+}

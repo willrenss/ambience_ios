@@ -64,8 +64,14 @@ final class EventDetailViewModel {
 struct EventDetailView: View {
     let eventID: UUID
     @State private var viewModel = EventDetailViewModel()
+    @State private var isFavorited = false
+    @State private var showStatusIntent = false
+    @State private var statusIntentConfirmed = false
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
+
+    private let teal       = Color(hex: 0x1E7082)
+    private let tealShadow = Color(hex: 0x0F4F5E)
 
     private enum EventStatus { case upcoming, active, ended }
 
@@ -79,7 +85,10 @@ struct EventDetailView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Color(hex: 0xF5F0EB).ignoresSafeArea()
+            Image("eventBackgroundDetail")
+                .resizable()
+                .scaledToFill()
+                .ignoresSafeArea()
 
             ScrollView {
                 VStack(spacing: 0) {
@@ -97,7 +106,7 @@ struct EventDetailView: View {
                         }
                         .padding(.horizontal, Spacing.lg)
                         .padding(.top, Spacing.lg)
-                        .padding(.bottom, 110)
+                        .padding(.bottom, 120)
                     } else if !viewModel.isLoading {
                         ProgressView()
                             .frame(maxWidth: .infinity)
@@ -107,22 +116,33 @@ struct EventDetailView: View {
             }
             .scrollIndicators(.hidden)
 
-            // Back button overlay on top of hero
-            VStack {
-                HStack {
-                    Button { dismiss() } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.primary)
-                            .frame(width: 36, height: 36)
-                            .background(.ultraThinMaterial, in: Circle())
-                    }
-                    Spacer()
+            // Back + Heart overlay — plain HStack (ZStack .top handles alignment;
+            // no outer VStack+Spacer so the hit area doesn't shadow the ScrollView)
+            HStack {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.black)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                        .background(.white, in: Circle())
+                        .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
                 }
-                .padding(.horizontal, Spacing.lg)
-                .padding(.top, Spacing.sm)
+                .buttonStyle(.plain)
                 Spacer()
+                Button { isFavorited.toggle() } label: {
+                    Image(systemName: isFavorited ? "heart.fill" : "heart")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(isFavorited ? Color.coral : .primary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                        .background(.white, in: Circle())
+                        .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
+                }
+                .buttonStyle(.plain)
             }
+            .padding(.horizontal, Spacing.lg)
+            .padding(.top, Spacing.sm)
 
             // Fixed bottom button
             if viewModel.event != nil {
@@ -135,6 +155,16 @@ struct EventDetailView: View {
                 .ignoresSafeArea(edges: .bottom)
             }
         }
+        .fullScreenCover(isPresented: $showStatusIntent, onDismiss: {
+            if statusIntentConfirmed { dismiss() }
+        }) {
+            StatusIntentView { status in
+                try? await APIClient.shared.patch("/me", body: StatusPatchBody(status: status))
+                statusIntentConfirmed = true
+            }
+        }
+        .navigationBarHidden(true)
+        .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
             Button("OK") { viewModel.errorMessage = nil }
@@ -145,54 +175,91 @@ struct EventDetailView: View {
     // MARK: - Hero
 
     private func heroArea(event: EventDTO) -> some View {
-        ZStack(alignment: .bottomLeading) {
-            // Hero image
-            Group {
-                if let urlString = event.imageURL, let url = URL(string: urlString) {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .success(let img): img.resizable().scaledToFill()
-                        default: heroBgFallback
+        ZStack(alignment: .bottom) {
+            // Hero image — fixed container via overlay so image load never shifts layout
+            Color.clear
+                .frame(maxWidth: .infinity)
+                .frame(height: 340)
+                .overlay {
+                    if let urlString = event.imageURL, let url = URL(string: urlString) {
+                        AsyncImage(url: url) { img in
+                            img.resizable().scaledToFill()
+                        } placeholder: {
+                            heroBgFallback
                         }
+                    } else {
+                        heroBgFallback
                     }
-                } else {
-                    heroBgFallback
                 }
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 340)
-            .clipped()
-            .clipShape(
-                UnevenRoundedRectangle(
-                    bottomLeadingRadius: 28,
-                    bottomTrailingRadius: 28
+                .clipped()
+                .clipShape(
+                    UnevenRoundedRectangle(
+                        bottomLeadingRadius: 28,
+                        bottomTrailingRadius: 28
+                    )
                 )
-            )
 
-            // Floating name/location card
-            VStack(alignment: .leading, spacing: 4) {
-                Text(event.name)
-                    .font(.headlineSmall)
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-                if let loc = event.locationName {
-                    Text(loc)
-                        .font(.labelMedium)
-                        .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 8) {
+                // Avatar stack — only when there are attendees
+                if event.attendeeCount > 0 {
+                    attendeeAvatarRow(event: event)
+                        .padding(.horizontal, Spacing.xl)
                 }
+
+                // Floating name/location card
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(event.name)
+                        .font(.headlineSmall)
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                    if let loc = event.locationName {
+                        Text(loc)
+                            .font(.labelMedium)
+                            .foregroundStyle(teal)
+                    }
+                }
+                .padding(.horizontal, Spacing.lg)
+                .padding(.vertical, Spacing.md)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: Radius.card)
+                        .fill(.white)
+                        .shadow(color: .black.opacity(0.1), radius: 16, y: 4)
+                )
+                .padding(.horizontal, Spacing.xl)
             }
-            .padding(.horizontal, Spacing.lg)
-            .padding(.vertical, Spacing.md)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: Radius.card)
-                    .fill(.white)
-                    .shadow(color: .black.opacity(0.1), radius: 16, y: 4)
-            )
-            .padding(.horizontal, Spacing.xl)
             .offset(y: 36)
         }
         .padding(.bottom, 36)
+    }
+
+    private func attendeeAvatarRow(event: EventDTO) -> some View {
+        HStack(spacing: 0) {
+            HStack(spacing: -12) {
+                ForEach(Array(event.attendeeInitials.prefix(5).enumerated()), id: \.offset) { _, initials in
+                    Circle()
+                        .fill(Color(.systemGray4))
+                        .frame(width: 36, height: 36)
+                        .overlay(
+                            Text(initials)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.primary)
+                        )
+                        .overlay(Circle().stroke(.white, lineWidth: 2))
+                }
+                let shown = min(event.attendeeInitials.count, 5)
+                if event.attendeeCount > shown {
+                    let extra = event.attendeeCount - shown
+                    Text("+\(extra)")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 36, height: 36)
+                        .background(teal, in: Circle())
+                        .overlay(Circle().stroke(.white, lineWidth: 2))
+                }
+            }
+            Spacer()
+        }
     }
 
     private var heroBgFallback: some View {
@@ -207,7 +274,6 @@ struct EventDetailView: View {
 
     private func dateAndPriceCard(event: EventDTO) -> some View {
         HStack(spacing: 0) {
-            // Date column
             VStack(alignment: .leading, spacing: 2) {
                 Text(event.startAt.map { EventDetailView.longDate($0) } ?? "TBA")
                     .font(.titleSmall)
@@ -222,7 +288,6 @@ struct EventDetailView: View {
                 .frame(height: 36)
                 .padding(.horizontal, Spacing.lg)
 
-            // Price column
             VStack(alignment: .leading, spacing: 2) {
                 Text(event.hargaTiket.map { $0 == 0 ? "Free" : "From Rp\(Int($0).formattedThousands)" } ?? "TBA")
                     .font(.titleSmall)
@@ -253,6 +318,13 @@ struct EventDetailView: View {
                 .foregroundStyle(.secondary)
                 .lineSpacing(4)
         }
+        .padding(.horizontal, Spacing.lg)
+        .padding(.vertical, Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: Radius.chip)
+                .stroke(Color.peach, lineWidth: 1.5)
+        )
     }
 
     // MARK: - Where to Buy
@@ -260,9 +332,7 @@ struct EventDetailView: View {
     private func whereToBuyRow(link: String) -> some View {
         Group {
             if let url = URL(string: link) {
-                Link(destination: url) {
-                    whereToBuyContent
-                }
+                Link(destination: url) { whereToBuyContent }
             } else {
                 whereToBuyContent
             }
@@ -276,7 +346,6 @@ struct EventDetailView: View {
                 .foregroundStyle(.primary)
             Spacer()
             HStack(spacing: Spacing.sm) {
-                // Tiket.com-style badge
                 ZStack {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color(hex: 0x0069D9))
@@ -304,24 +373,14 @@ struct EventDetailView: View {
     private var bottomButton: some View {
         switch eventStatus {
         case .upcoming:
-            Text("Awaiting Event Start")
-                .font(.labelLarge)
-                .frame(maxWidth: .infinity)
-                .frame(height: 50)
-                .foregroundStyle(Color.primary.opacity(0.35))
-                .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: Radius.chip))
+            disabledButton(title: "Awaiting Event Start")
 
         case .ended:
-            Text("Event Has Ended")
-                .font(.labelLarge)
-                .frame(maxWidth: .infinity)
-                .frame(height: 50)
-                .foregroundStyle(Color.primary.opacity(0.35))
-                .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: Radius.chip))
+            disabledButton(title: "Event Has Ended")
 
         case .active:
             if viewModel.isJoining {
-                ProgressView().frame(maxWidth: .infinity).frame(height: 50)
+                ProgressView().frame(maxWidth: .infinity).frame(height: 54)
             } else {
                 VStack(spacing: Spacing.sm) {
                     if let dist = viewModel.distanceMeters, !viewModel.radarEligible {
@@ -332,17 +391,58 @@ struct EventDetailView: View {
                     }
                     Button {
                         Task {
-                            // Setting activeEvent triggers EventMapView.onChange →
-                            // fullScreenCover dismisses automatically, no dismiss() needed.
-                            _ = await viewModel.joinRadar(appState: appState)
+                            let ok = await viewModel.joinRadar(appState: appState)
+                            if ok { showStatusIntent = true }
                         }
                     } label: {
-                        Text(viewModel.radarEligible ? "Check In" : "Check Distance")
+                        Text("I'm in the Area")
+                            .font(.system(size: 17, weight: .bold))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 54)
+                            .foregroundStyle(.black)
                     }
-                    .buttonStyle(PrimaryButtonStyle())
+                    .buttonStyle(.plain)
+                    .background {
+                        GeometryReader { g in
+                            ZStack(alignment: .topLeading) {
+                                RoundedRectangle(cornerRadius: 27)
+                                    .fill(.black)
+                                    .frame(width: g.size.width, height: g.size.height)
+                                    .offset(x: 4, y: 6)
+                                RoundedRectangle(cornerRadius: 27)
+                                    .fill(teal)
+                                    .frame(width: g.size.width, height: g.size.height)
+                            }
+                        }
+                    }
+                    .padding(.bottom, 7)
+                    .padding(.trailing, 5)
                 }
             }
         }
+    }
+
+    private func disabledButton(title: String) -> some View {
+        Text(title)
+            .font(.system(size: 17, weight: .semibold))
+            .frame(maxWidth: .infinity)
+            .frame(height: 54)
+            .foregroundStyle(Color.primary.opacity(0.35))
+            .background {
+                GeometryReader { g in
+                    ZStack(alignment: .topLeading) {
+                        RoundedRectangle(cornerRadius: 27)
+                            .fill(.black.opacity(0.55))
+                            .frame(width: g.size.width, height: g.size.height)
+                            .offset(x: 4, y: 6)
+                        RoundedRectangle(cornerRadius: 27)
+                            .fill(Color(.systemGray5))
+                            .frame(width: g.size.width, height: g.size.height)
+                    }
+                }
+            }
+            .padding(.bottom, 7)
+            .padding(.trailing, 5)
     }
 
     // MARK: - Helpers
