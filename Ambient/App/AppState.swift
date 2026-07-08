@@ -38,6 +38,9 @@ final class AppState: @unchecked Sendable {
     }
     var activeEvent: EventDTO? = nil
 
+    // Set by StatusIntentView — HomeView observes and auto-connects to radar.
+    var shouldAutoConnectRadar: Bool = false
+
     // The radar blip currently focused (used as the Back Tap ping target).
     var focusTargetUserID: UUID? {
         didSet {

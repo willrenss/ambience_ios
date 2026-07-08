@@ -140,7 +140,13 @@ struct EventMapView: View {
                 .animation(.spring(response: 0.35, dampingFraction: 0.85), value: displayed.id)
             }
         }
-        .fullScreenCover(item: $sheetEvent) { e in
+        .fullScreenCover(item: $sheetEvent, onDismiss: {
+            // EventDetailView fully dismissed — now safe to open radar if user checked in.
+            if appState.activeEvent != nil {
+                appState.shouldAutoConnectRadar = true
+                isRadarPresented = true
+            }
+        }) { e in
             EventDetailView(eventID: e.id)
         }
         .fullScreenCover(isPresented: $isSearchActive) {
@@ -152,11 +158,7 @@ struct EventMapView: View {
             HomeView()
         }
         .onChange(of: appState.activeEvent) { _, event in
-            if event != nil {
-                isSearchActive = false
-                sheetEvent = nil
-                isRadarPresented = true
-            } else {
+            if event == nil {
                 isRadarPresented = false
                 previewEvent = nil
             }
@@ -168,108 +170,108 @@ struct EventMapView: View {
     // MARK: - Overlay card (unified: preview + checked-in)
 
     private func overlayCard(event: EventDTO, isCheckedIn: Bool) -> some View {
-        HStack(alignment: .center, spacing: Spacing.sm) {
-            // Heart button — only in preview (not when checked in)
-            if !isCheckedIn {
-                Button { isFavorited.toggle() } label: {
-                    Image(systemName: isFavorited ? "heart.fill" : "heart")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(Color.coral)
-                        .frame(width: 48, height: 48)
-                        .background(.white, in: Circle())
-                        .shadow(color: .black.opacity(0.12), radius: 10, y: 3)
-                }
+        // Card — tap opens radar (if checked in) or detail (if preview)
+        Button {
+            if isCheckedIn {
+                isRadarPresented = true
+            } else {
+                sheetEvent = MapSheetEvent(id: event.id)
             }
-
-            // Card — tap opens radar (if checked in) or detail (if preview)
-            Button {
-                if isCheckedIn {
-                    isRadarPresented = true
-                } else {
-                    sheetEvent = MapSheetEvent(id: event.id)
-                }
-            } label: {
-                HStack(spacing: Spacing.md) {
-                    // Thumbnail
-                    Color.clear
-                        .frame(width: 100, height: 106)
-                        .overlay {
-                            if let urlStr = event.imageURL, let url = URL(string: urlStr) {
-                                AsyncImage(url: url) { img in
-                                    img.resizable().scaledToFill()
-                                } placeholder: {
-                                    Color(.systemGray5)
-                                }
-                            } else {
+        } label: {
+            HStack(spacing: Spacing.md) {
+                // Thumbnail
+                Color.clear
+                    .frame(width: 100, height: 106)
+                    .overlay {
+                        if let urlStr = event.imageURL, let url = URL(string: urlStr) {
+                            AsyncImage(url: url) { img in
+                                img.resizable().scaledToFill()
+                            } placeholder: {
                                 Color(.systemGray5)
                             }
+                        } else {
+                            Color(.systemGray5)
                         }
-                        .clipped()
-                        .clipShape(RoundedRectangle(cornerRadius: Radius.button))
-
-                    // Info
-                    VStack(alignment: .leading, spacing: 4) {
-                        if let cat = event.category {
-                            Text(cat)
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(teal)
-                        }
-                        Text(event.name)
-                            .font(.system(size: 17, weight: .bold))
-                            .foregroundStyle(.primary)
-                            .lineLimit(2)
-                        if let loc = event.locationName {
-                            Text(loc)
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-                        HStack(spacing: Spacing.sm) {
-                            if isCheckedIn {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.system(size: 10))
-                                    Text("Checked In")
-                                        .font(.labelSmall)
-                                }
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, Spacing.sm)
-                                .padding(.vertical, 4)
-                                .background(teal, in: Capsule())
-                            } else {
-                                SearchPriceBadge(event: event)
-                            }
-                            Spacer(minLength: 0)
-                            // Mini avatar stack
-                            HStack(spacing: -10) {
-                                ForEach(Array(event.attendeeInitials.prefix(3).enumerated()), id: \.offset) { _, ini in
-                                    Circle()
-                                        .fill(Color(.systemGray3))
-                                        .frame(width: 28, height: 28)
-                                        .overlay(Text(ini).font(.system(size: 9, weight: .bold)).foregroundStyle(.white))
-                                        .overlay(Circle().stroke(.white, lineWidth: 2))
-                                }
-                                let shown = min(event.attendeeInitials.count, 3)
-                                if event.attendeeCount > shown {
-                                    Text("+\(event.attendeeCount - shown)")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundStyle(.white)
-                                        .frame(width: 28, height: 28)
-                                        .background(teal, in: Circle())
-                                        .overlay(Circle().stroke(.white, lineWidth: 2))
-                                }
-                            }
-                        }
-                        .padding(.top, 4)
                     }
-                    Spacer(minLength: 0)
+                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: Radius.button))
+
+                // Info
+                VStack(alignment: .leading, spacing: 4) {
+                    if let cat = event.category {
+                        Text(cat)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(teal)
+                    }
+                    Text(event.name)
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                    if let loc = event.locationName {
+                        Text(loc)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    HStack(spacing: Spacing.sm) {
+                        if isCheckedIn {
+                            HStack(spacing: 4) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 10))
+                                Text("Checked In")
+                                    .font(.labelSmall)
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, Spacing.sm)
+                            .padding(.vertical, 4)
+                            .background(teal, in: Capsule())
+                        } else {
+                            SearchPriceBadge(event: event)
+                        }
+                        Spacer(minLength: 0)
+                        // Mini avatar stack
+                        HStack(spacing: -10) {
+                            ForEach(Array(event.attendeeInitials.prefix(3).enumerated()), id: \.offset) { _, ini in
+                                Circle()
+                                    .fill(Color(.systemGray3))
+                                    .frame(width: 28, height: 28)
+                                    .overlay(Text(ini).font(.system(size: 9, weight: .bold)).foregroundStyle(.white))
+                                    .overlay(Circle().stroke(.white, lineWidth: 2))
+                            }
+                            let shown = min(event.attendeeInitials.count, 3)
+                            if event.attendeeCount > shown {
+                                Text("+\(event.attendeeCount - shown)")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 28, height: 28)
+                                    .background(teal, in: Circle())
+                                    .overlay(Circle().stroke(.white, lineWidth: 2))
+                            }
+                        }
+                    }
+                    .padding(.top, 4)
                 }
-                .padding(Spacing.md)
-                .background(.white, in: RoundedRectangle(cornerRadius: Radius.card))
-                .shadow(color: .black.opacity(0.10), radius: 20, y: 6)
+                Spacer(minLength: 0)
             }
-            .buttonStyle(.plain)
+            .padding(Spacing.md)
+            .background(.white, in: RoundedRectangle(cornerRadius: Radius.card))
+            .shadow(color: .black.opacity(0.10), radius: 20, y: 6)
+            // Heart button pinned to top-left corner of the card
+            .overlay(alignment: .topLeading) {
+                if !isCheckedIn {
+                    Button { isFavorited.toggle() } label: {
+                        Image(systemName: isFavorited ? "heart.fill" : "heart")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(Color.coral)
+                            .frame(width: 44, height: 44)
+                            .background(.white, in: Circle())
+                            .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
+                    }
+                    .offset(x: -8, y: -8)
+                }
+            }
         }
+        .buttonStyle(.plain)
     }
 }
 

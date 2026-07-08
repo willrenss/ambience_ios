@@ -34,7 +34,7 @@ final class HomeViewModel {
     var radarDisarmed = false   // set true when heartbeat reports we left the radius
 
     struct Banner: Equatable {
-        enum Kind { case ping, match }
+        enum Kind { case ping, match, pingSent }
         let kind: Kind
         let text: String
     }
@@ -45,8 +45,15 @@ final class HomeViewModel {
 
     // Resubscribes to whatever radar session is already running — used when
     // returning to an already-connected Home (e.g. switching tabs and back).
-    func start(appState: AppState) {
-        guard isConnected else { return }
+    func start(appState: AppState) async {
+        if !isConnected {
+            // Optimistically show connected UI when there's an active event so we don't
+            // flash TapToConnectView during the async actor call below.
+            if appState.activeEvent != nil { isConnected = true }
+            let running = await EventRadarService.shared.isRunning
+            if !running { isConnected = false; return }
+            isConnected = true
+        }
         subscribeStreams()
     }
 
@@ -79,6 +86,9 @@ final class HomeViewModel {
         let radar = EventRadarService.shared
         usersTask?.cancel()
         usersTask = Task { @MainActor [weak self] in
+            // Seed immediately with cached value so the radar isn't empty on re-subscribe
+            let current = await radar.currentNearbyUsers
+            self?.nearbyUsers = current
             let stream = await radar.nearbyUsersStream
             for await users in stream {
                 self?.nearbyUsers = users
@@ -100,9 +110,10 @@ final class HomeViewModel {
             showBanner(.init(kind: .ping, text: "\(ping.fromNickname), \(ping.fromAge) pinged you"))
             receivedPings.removeAll { $0.fromUserID == ping.fromUserID }
             receivedPings.insert(ping, at: 0)
-        case .mutualMatch(let roomID):
+        case .mutualMatch(let roomID, let peerUserID):
             HapticManager.shared.play(.mutualMatch)
-            pendingRoomID = roomID
+            if let peerUserID { receivedPings.removeAll { $0.fromUserID == peerUserID } }
+            Task { pendingRoomID = await resolveRoom(roomID: roomID, peerUserID: peerUserID) }
         case .leftRadius:
             HapticManager.shared.play(.error)
             radarDisarmed = true
@@ -118,11 +129,24 @@ final class HomeViewModel {
             if resp.mutual, let roomID = resp.roomID {
                 HapticManager.shared.play(.mutualMatch)
                 showBanner(.init(kind: .match, text: "Matched with \(user.nickname)!"))
-                pendingRoomID = roomID
+                receivedPings.removeAll { $0.fromUserID == user.id }
+                pendingRoomID = await resolveRoom(roomID: roomID, peerUserID: user.id)
+            } else {
+                showBanner(.init(kind: .pingSent, text: "Ping Sent"))
             }
         } catch {
             errorMessage = "Couldn't send ping."
         }
+    }
+
+    // Prefer an existing room with this peer so chat history is preserved across events.
+    func resolveRoom(roomID: UUID, peerUserID: UUID?) async -> UUID {
+        guard let peerUserID else { return roomID }
+        if let rooms = try? await MatchService.shared.fetchMatches(),
+           let existing = rooms.first(where: { $0.peerUserID == peerUserID }) {
+            return existing.id
+        }
+        return roomID
     }
 
     // Focus a blip so the Back Tap PingIntent targets it.

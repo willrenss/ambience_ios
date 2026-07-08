@@ -133,18 +133,28 @@ struct EventRadarUserDTO: Sendable, Identifiable {
     let nickname: String
     let age: Int
     let radarToken: String     // short stable hex (8 bytes) embedded in BLE advertisement
+    var photoURL: String? = nil
+    var interests: [String]? = nil
+    var status: String? = nil
+    var lat: Double? = nil     // GPS latitude — pushed via WebSocket
+    var lng: Double? = nil     // GPS longitude — pushed via WebSocket
 
     var id: UUID { userID }
 }
 
 extension EventRadarUserDTO: Codable {
-    private enum CodingKeys: CodingKey { case userID, nickname, age, radarToken }
+    private enum CodingKeys: CodingKey { case userID, nickname, age, radarToken, photoURL, interests, status, lat, lng }
     nonisolated init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         userID     = try c.decode(UUID.self,   forKey: .userID)
         nickname   = try c.decode(String.self, forKey: .nickname)
         age        = try c.decode(Int.self,    forKey: .age)
         radarToken = try c.decode(String.self, forKey: .radarToken)
+        photoURL   = try c.decodeIfPresent(String.self,   forKey: .photoURL)
+        interests  = try c.decodeIfPresent([String].self, forKey: .interests)
+        status     = try c.decodeIfPresent(String.self,   forKey: .status)
+        lat        = try c.decodeIfPresent(Double.self,   forKey: .lat)
+        lng        = try c.decodeIfPresent(Double.self,   forKey: .lng)
     }
     nonisolated func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -152,7 +162,44 @@ extension EventRadarUserDTO: Codable {
         try c.encode(nickname,   forKey: .nickname)
         try c.encode(age,        forKey: .age)
         try c.encode(radarToken, forKey: .radarToken)
+        try c.encodeIfPresent(photoURL,  forKey: .photoURL)
+        try c.encodeIfPresent(interests, forKey: .interests)
+        try c.encodeIfPresent(status,    forKey: .status)
+        try c.encodeIfPresent(lat,       forKey: .lat)
+        try c.encodeIfPresent(lng,       forKey: .lng)
     }
+}
+
+// MARK: - Radar WebSocket
+
+struct RadarSocketMessage: Sendable {
+    let event: String   // "roster" | "user_moved" | "ping" | "left_radius" | "location"
+    let payload: String
+}
+
+extension RadarSocketMessage: Codable {
+    private enum CodingKeys: CodingKey { case event, payload }
+    nonisolated init(from decoder: any Decoder) throws {
+        let c   = try decoder.container(keyedBy: CodingKeys.self)
+        event   = try c.decode(String.self, forKey: .event)
+        payload = try c.decode(String.self, forKey: .payload)
+    }
+    nonisolated func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(event,   forKey: .event)
+        try c.encode(payload, forKey: .payload)
+    }
+}
+
+struct UserPositionUpdate: Sendable, Codable {
+    let userID: UUID
+    let lat: Double
+    let lng: Double
+}
+
+struct MutualMatchWS: Sendable, Codable {
+    let roomID: UUID
+    let peerUserID: UUID
 }
 
 // MARK: - Ping
@@ -217,11 +264,13 @@ struct RoomDTO: Sendable, Identifiable {
     let eventID: UUID?
     let eventName: String?
     let createdAt: Date?
+    /// true = current user was the first pinger (userA) → UWB guest/initiator
+    let isInitiator: Bool
 }
 
 extension RoomDTO: Codable {
     private enum CodingKeys: CodingKey {
-        case id, codeRoom, peerUserID, peerNickname, peerAge, eventID, eventName, createdAt
+        case id, codeRoom, peerUserID, peerNickname, peerAge, eventID, eventName, createdAt, isInitiator
     }
     nonisolated init(from decoder: any Decoder) throws {
         let c        = try decoder.container(keyedBy: CodingKeys.self)
@@ -233,6 +282,7 @@ extension RoomDTO: Codable {
         eventID      = try c.decodeIfPresent(UUID.self,   forKey: .eventID)
         eventName    = try c.decodeIfPresent(String.self, forKey: .eventName)
         createdAt    = try c.decodeIfPresent(Date.self,   forKey: .createdAt)
+        isInitiator  = try c.decodeIfPresent(Bool.self,   forKey: .isInitiator) ?? false
     }
     nonisolated func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -244,6 +294,7 @@ extension RoomDTO: Codable {
         try c.encodeIfPresent(eventID,   forKey: .eventID)
         try c.encodeIfPresent(eventName, forKey: .eventName)
         try c.encodeIfPresent(createdAt, forKey: .createdAt)
+        try c.encode(isInitiator, forKey: .isInitiator)
     }
 }
 

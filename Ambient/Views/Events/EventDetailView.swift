@@ -65,6 +65,8 @@ struct EventDetailView: View {
     let eventID: UUID
     @State private var viewModel = EventDetailViewModel()
     @State private var isFavorited = false
+    @State private var showStatusIntent = false
+    @State private var statusIntentConfirmed = false
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
 
@@ -83,7 +85,10 @@ struct EventDetailView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Color.white.ignoresSafeArea()
+            Image("eventBackgroundDetail")
+                .resizable()
+                .scaledToFill()
+                .ignoresSafeArea()
 
             ScrollView {
                 VStack(spacing: 0) {
@@ -111,32 +116,33 @@ struct EventDetailView: View {
             }
             .scrollIndicators(.hidden)
 
-            // Back + Heart overlay
-            VStack {
-                HStack {
-                    Button { dismiss() } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(.black)
-                            .frame(width: 44, height: 44)
-                            .background(.white, in: Circle())
-                            .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
-                    }
-                    .buttonStyle(.plain)
-                    Spacer()
-                    Button { isFavorited.toggle() } label: {
-                        Image(systemName: isFavorited ? "heart.fill" : "heart")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(isFavorited ? Color.coral : .primary)
-                            .frame(width: 44, height: 44)
-                            .background(.white, in: Circle())
-                            .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
-                    }
+            // Back + Heart overlay — plain HStack (ZStack .top handles alignment;
+            // no outer VStack+Spacer so the hit area doesn't shadow the ScrollView)
+            HStack {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.black)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                        .background(.white, in: Circle())
+                        .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
                 }
-                .padding(.horizontal, Spacing.lg)
-                .padding(.top, Spacing.sm)
+                .buttonStyle(.plain)
                 Spacer()
+                Button { isFavorited.toggle() } label: {
+                    Image(systemName: isFavorited ? "heart.fill" : "heart")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(isFavorited ? Color.coral : .primary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                        .background(.white, in: Circle())
+                        .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
+                }
+                .buttonStyle(.plain)
             }
+            .padding(.horizontal, Spacing.lg)
+            .padding(.top, Spacing.sm)
 
             // Fixed bottom button
             if viewModel.event != nil {
@@ -147,6 +153,14 @@ struct EventDetailView: View {
                         .padding(.bottom, 36)
                 }
                 .ignoresSafeArea(edges: .bottom)
+            }
+        }
+        .fullScreenCover(isPresented: $showStatusIntent, onDismiss: {
+            if statusIntentConfirmed { dismiss() }
+        }) {
+            StatusIntentView { status in
+                try? await APIClient.shared.patch("/me", body: StatusPatchBody(status: status))
+                statusIntentConfirmed = true
             }
         }
         .navigationBarHidden(true)
@@ -378,7 +392,7 @@ struct EventDetailView: View {
                     Button {
                         Task {
                             let ok = await viewModel.joinRadar(appState: appState)
-                            if ok { dismiss() }
+                            if ok { showStatusIntent = true }
                         }
                     } label: {
                         Text("I'm in the Area")
@@ -392,7 +406,7 @@ struct EventDetailView: View {
                         GeometryReader { g in
                             ZStack(alignment: .topLeading) {
                                 RoundedRectangle(cornerRadius: 27)
-                                    .fill(tealShadow)
+                                    .fill(.black)
                                     .frame(width: g.size.width, height: g.size.height)
                                     .offset(x: 4, y: 6)
                                 RoundedRectangle(cornerRadius: 27)

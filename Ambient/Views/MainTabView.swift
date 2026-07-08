@@ -2,19 +2,26 @@ import SwiftUI
 
 struct MainTabView: View {
     @Environment(AppState.self) private var appState
-    @State private var mapsRouter    = NavigationRouter()
-    @State private var profileRouter = NavigationRouter()
+    @State private var mapsRouter      = NavigationRouter()
+    @State private var bookmarksRouter = NavigationRouter()
+    @State private var profileRouter   = NavigationRouter()
 
     var body: some View {
         @Bindable var appState = appState
 
         Group {
             switch appState.selectedTab {
-            case .maps, .bookmarks:
+            case .maps:
                 NavigationStack(path: $mapsRouter.path) {
                     EventMapView()
                 }
                 .environment(mapsRouter)
+
+            case .bookmarks:
+                NavigationStack(path: $bookmarksRouter.path) {
+                    MatchesView()
+                }
+                .environment(bookmarksRouter)
 
             case .profile:
                 NavigationStack(path: $profileRouter.path) {
@@ -24,11 +31,25 @@ struct MainTabView: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            FloatingTabBar(selectedTab: $appState.selectedTab)
-                .padding(.bottom, 8)
+            // depth > 0 means we pushed into a sub-screen (e.g. RoomView);
+            // hide the tab bar so it doesn't overlay chat. Works on both tabs.
+            // Hide tab bar when inside chat (bookmarks tab) or any pushed screen
+            let pushed = appState.selectedTab == .bookmarks
+                      || bookmarksRouter.depth > 0
+                      || mapsRouter.depth > 0
+            if !pushed {
+                FloatingTabBar(selectedTab: $appState.selectedTab)
+                    .padding(.bottom, 8)
+            }
         }
         .onChange(of: appState.activeEvent == nil) { _, _ in
             mapsRouter.popToRoot()
+        }
+        .task {
+            // Trigger NISession creation as soon as the main screen is visible.
+            // This makes "Nearby Interactions" appear in iOS Settings and pre-warms
+            // the token so it's ready when the user opens a chat room.
+            NearbyInteractionService.shared.requestPermissionIfNeeded()
         }
     }
 }

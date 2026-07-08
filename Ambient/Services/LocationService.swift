@@ -9,8 +9,8 @@ actor LocationService: NSObject {
     private(set) var currentLocation: CLLocation?
     private(set) var headingDegrees: Double?
 
-    // Continuation stream of fresh CLLocation fixes — consumed by EventRadarService's heartbeat.
     private var locationContinuation: AsyncStream<CLLocation>.Continuation?
+    private var headingContinuation: AsyncStream<Double>.Continuation?
 
     override init() { super.init() }
 
@@ -18,9 +18,9 @@ actor LocationService: NSObject {
         let delegate = LocationDelegate(owner: self)
         locationDelegate = delegate
         manager.delegate = delegate
-        manager.desiredAccuracy = kCLLocationAccuracyBest
-        manager.distanceFilter  = kCLDistanceFilterNone
-        manager.headingFilter   = 2
+        manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
+        manager.distanceFilter  = kCLDistanceFilterNone   // setiap gerakan kecil dikirim
+        manager.headingFilter   = 1                       // update tiap 1° perubahan arah
         manager.requestWhenInUseAuthorization()
         manager.startUpdatingLocation()
         manager.startUpdatingHeading()
@@ -36,6 +36,8 @@ actor LocationService: NSObject {
         headingDegrees = nil
         locationContinuation?.finish()
         locationContinuation = nil
+        headingContinuation?.finish()
+        headingContinuation = nil
     }
 
     // A stream of location fixes. Resets any prior stream.
@@ -44,6 +46,15 @@ actor LocationService: NSObject {
         return AsyncStream { continuation in
             self.locationContinuation = continuation
             if let loc = currentLocation { continuation.yield(loc) }
+        }
+    }
+
+    // A stream of compass heading updates (magnetic degrees).
+    func headingUpdates() -> AsyncStream<Double> {
+        headingContinuation?.finish()
+        return AsyncStream { continuation in
+            self.headingContinuation = continuation
+            if let h = headingDegrees { continuation.yield(h) }
         }
     }
 
@@ -67,6 +78,7 @@ actor LocationService: NSObject {
 
     func didUpdateHeading(_ degrees: Double) {
         headingDegrees = degrees
+        headingContinuation?.yield(degrees)
     }
 }
 

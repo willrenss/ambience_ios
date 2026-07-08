@@ -9,7 +9,7 @@ enum ServerConfig {
     static let fallback: String = serverFallbackURL
 
     // UserDefaults access is @MainActor in iOS 18 SDK; mark callers accordingly.
-    @MainActor static var currentURL: String {
+    @MainActor static var currentURL: String {  
         UserDefaults.standard.string(forKey: urlKey) ?? fallback
     }
 
