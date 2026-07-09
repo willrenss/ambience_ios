@@ -23,3 +23,11 @@ struct AmbientApp: App {
         }
     }
 }
+
+#Preview {
+    @Previewable @State var appState = AppState()
+
+    RootView()
+        .environment(appState)
+        .preferredColorScheme(.light)
+}
