@@ -122,127 +122,206 @@ private let randomNicknames: [String] = [
     "Pixel Owl", "Turbo Bee", "Velvet Elk", "Crimson Jay", "Shadow Moth"
 ]
 
+// MARK: - Step 0: Name
+
 private struct NameStep: View {
     @Bindable var vm: OnboardingViewModel
     @FocusState private var focused: Bool
-    // Captured once before keyboard appears — prevents title from shifting
-    @State private var fixedHeight: CGFloat = 0
-
+    
+    // Theme Colors
+    let bgOrange = Color(red: 1.0, green: 0.27, blue: 0.0)
+    let darkOrange = Color(red: 0.82, green: 0.18, blue: 0.0) // For "Lets" and bottom hill
+    let inputBg = Color(red: 0.96, green: 0.55, blue: 0.41) // Coral/Peach for textfield
+    let tealButton = Color(red: 0.22, green: 0.44, blue: 0.47)
+    
     var body: some View {
-        GeometryReader { geo in
-            let imgH = fixedHeight * 0.65
-
-            VStack(spacing: 0) {
-                // ── Image card (rounded bottom corners) ──────────────────────
-                ZStack(alignment: .bottomLeading) {
-                    Image("Welcome1")
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: geo.size.width, height: imgH)
-                        .clipped()
-
-                    // Subtle gradient so text is readable
-                    LinearGradient(
-                        stops: [
-                            .init(color: .black.opacity(0.20), location: 0.0),
-                            .init(color: .black.opacity(0.55), location: 1.0),
-                        ],
-                        startPoint: .top, endPoint: .bottom
-                    )
-
-                    // Content overlay inside image
-                    VStack(alignment: .leading, spacing: 0) {
-                        Color.clear.frame(height: geo.safeAreaInsets.top + 12)
-
-                        Spacer(minLength: imgH * 0.27)
-
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text("WELCOME!")
-                                .font(.system(size: 64, weight: .heavy))
-                                .foregroundStyle(Color.scale(.brand, 600))
-                            Text("LETS GET\nTO IT!")
-                                .font(.system(size: 64, weight: .heavy))
-                                .foregroundStyle(.white)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .padding(.horizontal, 24)
-
-                        Spacer(minLength: 12)
-
-                        // Form at the bottom of the image
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Enter your name")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(.white)
-
-                            TextField("enter your nickname...", text: $vm.nickname)
-                                .font(.system(size: 16))
-                                .padding(.horizontal, 18)
-                                .padding(.vertical, 14)
-                                .background(
-                                    Capsule().stroke(Color.white.opacity(0.55), lineWidth: 1.5)
-                                )
-                                .background(Color.white.opacity(0.08), in: Capsule())
-                                .foregroundStyle(.white)
-                                .tint(.white)
-                                .focused($focused)
-                                .onAppear { focused = true }
-                                .textInputAutocapitalization(.words)
-                                .disableAutocorrection(true)
-
-                            Button {
-                                vm.nickname = randomNicknames.randomElement() ?? "Nova Lynx"
-                            } label: {
-                                Text("Pick a Random")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 22)
-                                    .padding(.vertical, 10)
-                                    .background(Color.black.opacity(0.40), in: Capsule())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, 28)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+        ZStack {
+            // MARK: - Backgrounds
+            bgOrange
+                .ignoresSafeArea()
+            
+            // Bottom Dark Curve (Hill Shape)
+            VStack {
+                Spacer()
+                Ellipse()
+                    .fill(darkOrange)
+                    .frame(width: UIScreen.main.bounds.width * 1, height: 350)
+                    .offset(y: 150)
+            }
+            .ignoresSafeArea()
+            
+            // MARK: - Main Content
+            VStack(alignment: .leading, spacing: 0) {
+                
+                // Typography Section
+                VStack(alignment: .leading, spacing: -5) {
+                    Text("Lets")
+                        .font(.system(size: 54, weight: .black, design: .default))
+                        .foregroundColor(darkOrange)
+                    
+                    Text("Get to\nKnow Each\nOther!")
+                        .font(.system(size: 54, weight: .black, design: .default))
+                        .foregroundColor(.white)
+                        .lineSpacing(0)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .frame(height: imgH)
-                .clipShape(
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: 0, bottomLeadingRadius: 32,
-                        bottomTrailingRadius: 32, topTrailingRadius: 0
-                    )
-                )
-                .shadow(color: .black.opacity(0.18), radius: 16, x: 0, y: 8)
-
-                // ── White bottom section ─────────────────────────────────────
-                VStack(spacing: 0) {
+                .padding(.top, 40)
+                
+                Spacer()
+                    .frame(height: 40)
+                
+                // Input Section
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("What should we call you ?")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundColor(.white)
+                    
+                    // Custom TextField
+                    ZStack(alignment: .leading) {
+                        if vm.nickname.isEmpty {
+                            Text("enter your nickname...")
+                                .foregroundColor(Color.black.opacity(0.5))
+                                .padding(.horizontal, 24)
+                        }
+                        
+                        TextField("", text: $vm.nickname)
+                            .font(.system(size: 18))
+                            .foregroundColor(.black)
+                            .padding(.vertical, 18)
+                            .padding(.horizontal, 24)
+                            .focused($focused)
+                            .onAppear { focused = true }
+                            .textInputAutocapitalization(.words)
+                            .disableAutocorrection(true)
+                    }
+                    .background(inputBg)
+                    .clipShape(Capsule())
+                    
+                    // Error Message Logic
                     if let error = vm.errorMessage {
                         Text(error)
                             .font(.caption)
-                            .foregroundStyle(Color.errorRed)
-                            .padding(.top, 12)
-                            .padding(.horizontal, 28)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 16)
                     }
-                    Spacer(minLength: 16)
-                    OnboardingBottomBar(
-                        step: 0, isLoading: vm.isLoading,
-                        canContinue: vm.canContinueCurrentStep,
-                        isLast: false, safeBottom: geo.safeAreaInsets.bottom,
-                        onNext: { Task { await vm.advance() } }
-                    )
-                    .padding(.horizontal, 28)
                 }
-                .frame(maxWidth: .infinity)
-                .background(.white)
+                
+                Spacer()
+                
+                // Illustration Section
+                NameCardsIllustration()
+                    .frame(height: 180)
+                    .frame(maxWidth: .infinity)
+                
+                Spacer()
+                
+                // Button Section
+                Button(action: {
+                    // Logic to dismiss keyboard and advance
+                    UIApplication.shared.sendAction(
+                        #selector(UIResponder.resignFirstResponder),
+                        to: nil, from: nil, for: nil
+                    )
+                    Task { await vm.advance() }
+                }) {
+                    Group {
+                        if vm.isLoading {
+                            ProgressView().tint(.white)
+                        } else {
+                            Text("Get Started")
+                        }
+                    }
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+                    .background(tealButton)
+                    .clipShape(Capsule())
+                    .background(
+                        Capsule()
+                            .fill(Color.black)
+                            .offset(x: 0, y: 5)
+                    )
+                }
+                .disabled(vm.isLoading || !vm.canContinueCurrentStep)
+                .opacity(vm.canContinueCurrentStep ? 1 : 0.6)
+                .padding(.bottom, 24)
             }
-            .onAppear {
-                if fixedHeight == 0 { fixedHeight = geo.size.height }
+            .padding(.horizontal, 32)
+        }
+    }
+}
+
+// MARK: - Illustration Components
+struct NameCardsIllustration: View {
+    var body: some View {
+        ZStack {
+            // Wavy White String
+            WavyStringShape()
+                .stroke(Color.white, lineWidth: 4)
+            
+            // Letter Cards
+            Group {
+                LetterCard(letter: "N", bgColor: Color(red: 0.85, green: 0.85, blue: 0.85), fgColor: Color(white: 0.65), rotation: -15)
+                    .offset(x: -105, y: 15)
+                LetterCard(letter: "A", bgColor: Color(red: 0.93, green: 0.78, blue: 0.13), fgColor: Color(red: 0.82, green: 0.65, blue: 0.05), rotation: 5)
+                    .offset(x: -30, y: 30)
+                LetterCard(letter: "E", bgColor: Color(red: 0.22, green: 0.73, blue: 0.45), fgColor: Color(red: 0.12, green: 0.58, blue: 0.32), rotation: 10)
+                    .offset(x: 95, y: 25)
+                LetterCard(letter: "M", bgColor: Color(red: 0.35, green: 0.42, blue: 0.95), fgColor: Color(red: 0.28, green: 0.33, blue: 0.85), rotation: -8)
+                    .offset(x: 35, y: 5)
+            }
+            
+            // Dark Dots
+            Group {
+                Circle().fill(Color(white: 0.3)).frame(width: 14).offset(x: -110, y: -30)
+                Circle().fill(Color(white: 0.3)).frame(width: 14).offset(x: -35, y: -18)
+                Circle().fill(Color(white: 0.3)).frame(width: 14).offset(x: 25, y: -45)
+                Circle().fill(Color(white: 0.3)).frame(width: 14).offset(x: 90, y: -28)
             }
         }
-        .ignoresSafeArea(edges: .top)
-        .background(.white)
+    }
+}
+
+struct LetterCard: View {
+    let letter: String
+    let bgColor: Color
+    let fgColor: Color
+    let rotation: Double
+    
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(bgColor)
+                .shadow(color: .black.opacity(0.15), radius: 6, x: 0, y: 4)
+            Text(letter)
+                .font(.system(size: 65, weight: .black, design: .default))
+                .foregroundColor(fgColor)
+        }
+        .frame(width: 75, height: 100)
+        .rotationEffect(.degrees(rotation))
+    }
+}
+
+struct WavyStringShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let c = CGPoint(x: rect.midX, y: rect.midY)
+        
+        let start = CGPoint(x: 0, y: c.y - 10)
+        let dotN = CGPoint(x: c.x - 110, y: c.y - 30)
+        let dotA = CGPoint(x: c.x - 35, y: c.y - 18)
+        let dotM = CGPoint(x: c.x + 25, y: c.y - 45)
+        let dotE = CGPoint(x: c.x + 90, y: c.y - 28)
+        let end = CGPoint(x: rect.maxX, y: c.y - 5)
+        
+        path.move(to: start)
+        path.addQuadCurve(to: dotN, control: CGPoint(x: c.x - 160, y: c.y - 45))
+        path.addQuadCurve(to: dotA, control: CGPoint(x: c.x - 70, y: c.y))
+        path.addQuadCurve(to: dotM, control: CGPoint(x: c.x - 5, y: c.y - 60))
+        path.addQuadCurve(to: dotE, control: CGPoint(x: c.x + 60, y: c.y - 10))
+        path.addQuadCurve(to: end, control: CGPoint(x: c.x + 140, y: c.y - 40))
+        return path
     }
 }
 
