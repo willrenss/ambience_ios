@@ -11,7 +11,7 @@ struct RootView: View {
                 Color.peach.opacity(0.35).ignoresSafeArea()
                     .overlay { ProgressView() }
             } else if showSplash {
-                SplashView()
+                OnboardingSplashView()
                     .transition(.opacity)
             } else if !appState.hasSeenWalkthrough {
                 WalkthroughView {

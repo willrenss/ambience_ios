@@ -2,19 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Ambient Social menggunakan jaringan lokal untuk terhubung ke server.</string>
-	<key>NSNearbyInteractionUsageDescription</key>
-	<string>Ambient uses UWB to show your exact distance and direction to someone you matched with in the same venue.</string>
-	<key>NSNearbyInteractionAllowOnceUsageDescription</key>
-	<string>Ambient uses UWB to show your exact distance and direction to someone you matched with in the same venue.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>Camera is used to improve UWB direction accuracy when your phone isn't held upright.</string>
-	<key>NSBonjourServices</key>
-	<array>
-		<string>_ambient-uwb._tcp</string>
-		<string>_ambient-uwb._udp</string>
-	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSExceptionDomains</key>
@@ -28,5 +15,10 @@
 			</dict>
 		</dict>
 	</dict>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_ambient-uwb._tcp</string>
+		<string>_ambient-uwb._udp</string>
+	</array>
 </dict>
 </plist>
