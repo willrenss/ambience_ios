@@ -9,9 +9,9 @@ final class HapticManager {
     static let shared = HapticManager()
 
     enum Pattern {
-        case receivePing   // single pulse, intensity 0.6, sharpness 0.4
-        case sendPing      // very short pulse, intensity 0.4, sharpness 0.8
-        case mutualMatch   // two pulses 0.7 then 1.0, ~100ms gap
+        case receivePing   // two strong pulses, intensity 1.0, sharpness 0.8, ~100ms gap
+        case sendPing      // single strong pulse, intensity 1.0, sharpness 0.8
+        case mutualMatch   // three strong pulses, intensity 1.0, sharpness 0.8, ~100ms gaps
         case error         // three short fast pulses, intensity 0.5, sharpness 0.9
     }
 
@@ -94,16 +94,18 @@ final class HapticManager {
         switch pattern {
         case .receivePing:
             return try CHHapticPattern(events: [
-                event(0, intensity: 0.6, sharpness: 0.4)
+                event(0.0, intensity: 1.0, sharpness: 0.8),
+                event(0.1, intensity: 1.0, sharpness: 0.8)
             ], parameters: [])
         case .sendPing:
             return try CHHapticPattern(events: [
-                event(0, intensity: 0.4, sharpness: 0.8)
+                event(0, intensity: 1.0, sharpness: 0.8)
             ], parameters: [])
         case .mutualMatch:
             return try CHHapticPattern(events: [
-                event(0.0,  intensity: 0.7, sharpness: 0.5),
-                event(0.1,  intensity: 1.0, sharpness: 0.6)   // ~100ms gap
+                event(0.0, intensity: 1.0, sharpness: 0.8),
+                event(0.1, intensity: 1.0, sharpness: 0.8),
+                event(0.2, intensity: 1.0, sharpness: 0.8)
             ], parameters: [])
         case .error:
             return try CHHapticPattern(events: [
@@ -119,9 +121,9 @@ final class HapticManager {
     private func playFallback(_ pattern: Pattern) {
         switch pattern {
         case .receivePing:
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
         case .sendPing:
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
         case .mutualMatch:
             UINotificationFeedbackGenerator().notificationOccurred(.success)
         case .error:
