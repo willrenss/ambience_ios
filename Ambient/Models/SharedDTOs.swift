@@ -389,6 +389,15 @@ extension Interest: Codable {
 }
 
 // MARK: - Events
+
+// A single avatar-stack entry — a real photo when the user has one, with
+// `initial` as the fallback letter, matching the photo-or-initials pattern
+// used everywhere else in the app.
+struct EventAttendeePreviewDTO: Sendable, Equatable, Codable {
+    let photoURL: String?
+    let initial: String
+}
+
 struct EventDTO: Sendable, Identifiable, Equatable {
     let id: UUID
     let name: String
@@ -407,13 +416,22 @@ struct EventDTO: Sendable, Identifiable, Equatable {
     let locationName: String?
     let attendeeInitials: [String]
     let attendeeCount: Int
+    // Who's currently online (radar-active) at this event — checked-in card.
+    var onlineAttendees: [EventAttendeePreviewDTO] = []
+    var onlineCount: Int = 0
+    // Who's bookmarked this event — preview (not-checked-in) card. `var` so the
+    // heart button can update these optimistically without a round-trip.
+    var bookmarkAttendees: [EventAttendeePreviewDTO] = []
+    var bookmarkCount: Int = 0
+    var isBookmarked: Bool = false
 }
 
 extension EventDTO: Codable {
     private enum CodingKeys: String, CodingKey {
         case id, name, source, organizer, longitude, latitude, deskripsi, linkMaps, linkRegistrasi,
              hargaTiket, startAt, endAt, imageURL, category, locationName,
-             attendeeInitials, attendeeCount
+             attendeeInitials, attendeeCount,
+             onlineAttendees, onlineCount, bookmarkAttendees, bookmarkCount, isBookmarked
     }
     nonisolated init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -434,6 +452,11 @@ extension EventDTO: Codable {
         locationName     = try c.decodeIfPresent(String.self, forKey: .locationName)
         attendeeInitials = try c.decodeIfPresent([String].self, forKey: .attendeeInitials) ?? []
         attendeeCount    = try c.decodeIfPresent(Int.self, forKey: .attendeeCount) ?? 0
+        onlineAttendees  = try c.decodeIfPresent([EventAttendeePreviewDTO].self, forKey: .onlineAttendees) ?? []
+        onlineCount      = try c.decodeIfPresent(Int.self, forKey: .onlineCount) ?? 0
+        bookmarkAttendees = try c.decodeIfPresent([EventAttendeePreviewDTO].self, forKey: .bookmarkAttendees) ?? []
+        bookmarkCount    = try c.decodeIfPresent(Int.self, forKey: .bookmarkCount) ?? 0
+        isBookmarked     = try c.decodeIfPresent(Bool.self, forKey: .isBookmarked) ?? false
     }
     nonisolated func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -454,6 +477,11 @@ extension EventDTO: Codable {
         try c.encodeIfPresent(locationName,   forKey: .locationName)
         try c.encode(attendeeInitials, forKey: .attendeeInitials)
         try c.encode(attendeeCount,    forKey: .attendeeCount)
+        try c.encode(onlineAttendees,  forKey: .onlineAttendees)
+        try c.encode(onlineCount,      forKey: .onlineCount)
+        try c.encode(bookmarkAttendees, forKey: .bookmarkAttendees)
+        try c.encode(bookmarkCount,    forKey: .bookmarkCount)
+        try c.encode(isBookmarked,     forKey: .isBookmarked)
     }
 }
 

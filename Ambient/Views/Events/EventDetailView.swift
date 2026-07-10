@@ -512,6 +512,35 @@ final class EventDetailViewModel {
         }
     }
 
+    // Optimistic toggle, matching EventMapView's overlayCard pattern — flips
+    // immediately, reverts if the request fails.
+    func toggleBookmark() async {
+        guard var updated = event else { return }
+        let wasBookmarked = updated.isBookmarked
+        updated.isBookmarked.toggle()
+        updated.bookmarkCount += updated.isBookmarked ? 1 : -1
+        event = updated
+        // EventMapView (which stays mounted underneath this sheet) listens for this
+        // and syncs its own previewEvent/viewModel.events — otherwise pressing back
+        // would land on the stale bookmark state from before this toggle.
+        NotificationCenter.default.post(name: .eventBookmarkChanged, object: updated)
+
+        do {
+            if updated.isBookmarked {
+                try await EventService.shared.bookmark(eventID: updated.id)
+            } else {
+                try await EventService.shared.unbookmark(eventID: updated.id)
+            }
+        } catch {
+            guard event?.id == updated.id else { return }
+            var reverted = updated
+            reverted.isBookmarked = wasBookmarked
+            reverted.bookmarkCount += wasBookmarked ? 1 : -1
+            event = reverted
+            NotificationCenter.default.post(name: .eventBookmarkChanged, object: reverted)
+        }
+    }
+
     func joinRadar(appState: AppState) async -> Bool {
         guard let event else { return false }
         isJoining = true
@@ -549,7 +578,6 @@ final class EventDetailViewModel {
 struct EventDetailView: View {
     let eventID: UUID
     @State private var viewModel = EventDetailViewModel()
-    @State private var isFavorited = false
     @State private var showStatusIntent = false
     @State private var statusIntentConfirmed = false
     @Environment(AppState.self) private var appState
@@ -765,10 +793,10 @@ struct EventDetailView: View {
                 
                 Spacer()
                 
-                Button { isFavorited.toggle() } label: {
-                    Image(systemName: isFavorited ? "heart.fill" : "heart")
+                Button { Task { await viewModel.toggleBookmark() } } label: {
+                    Image(systemName: viewModel.event?.isBookmarked == true ? "heart.fill" : "heart")
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(isFavorited ? .red : .black)
+                        .foregroundStyle(viewModel.event?.isBookmarked == true ? .red : .black)
                         .frame(width: 44, height: 44)
                         .background(.white, in: Circle())
                         .shadow(color: .black.opacity(0.1), radius: 6, y: 2)
