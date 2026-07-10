@@ -17,11 +17,10 @@ struct EventMapView: View {
             span: MKCoordinateSpan(latitudeDelta: 0.12, longitudeDelta: 0.12)
         )
     )
-    @Environment(NavigationRouter.self) private var router
     @Environment(AppState.self) private var appState
-
+    
     private let teal = Color(hex: 0x1E7082)
-
+    
     var body: some View {
         @Bindable var viewModel = viewModel
         @Bindable var appState = appState
@@ -53,7 +52,7 @@ struct EventMapView: View {
             .mapControls { }
             .ignoresSafeArea()
             .onTapGesture { previewEvent = nil }
-
+            
             VStack(spacing: 0) {
                 // ── Search bar ─────────────────────────────────────────────
                 Button { isSearchActive = true } label: {
@@ -70,13 +69,13 @@ struct EventMapView: View {
                     .padding(.horizontal, Spacing.md)
                     .padding(.vertical, 10)
                     .frame(maxWidth: .infinity)
-                    .background(.white, in: RoundedRectangle(cornerRadius: Radius.chip))
+                    .background(.white, in: RoundedRectangle(cornerRadius: 60, style: .continuous))
                     .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
                 }
                 .buttonStyle(.plain)
                 .padding(.horizontal, Spacing.lg)
                 .padding(.top, Spacing.sm)
-
+                
                 // ── Category chips ──────────────────────────────────────────
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: Spacing.sm) {
@@ -101,9 +100,9 @@ struct EventMapView: View {
                 }
                 .background(Color.white.opacity(0.001))
                 .padding(.top, Spacing.sm)
-
+                
                 Spacer()
-
+                
                 // ── Location button ────────────────────────────────────────
                 HStack {
                     Spacer()
@@ -126,7 +125,7 @@ struct EventMapView: View {
                 .padding(.trailing, Spacing.lg)
                 .padding(.bottom, Spacing.lg)
             }
-
+            
             // Overlay card — shows preview (pin tap) or checked-in state
             if let displayed = previewEvent ?? appState.activeEvent {
                 let isCheckedIn = appState.activeEvent?.id == displayed.id
@@ -140,6 +139,7 @@ struct EventMapView: View {
                 .animation(.spring(response: 0.35, dampingFraction: 0.85), value: displayed.id)
             }
         }
+        .toolbar(.hidden, for: .navigationBar)
         .fullScreenCover(item: $sheetEvent, onDismiss: {
             // EventDetailView fully dismissed — now safe to open radar if user checked in.
             if appState.activeEvent != nil {
@@ -150,9 +150,12 @@ struct EventMapView: View {
             EventDetailView(eventID: e.id)
         }
         .fullScreenCover(isPresented: $isSearchActive) {
-            EventSearchCover(viewModel: viewModel, onDismiss: {
-                isSearchActive = false
-            })
+            // 1. TAMBAHKAN NavigationStack di sini
+            NavigationStack {
+                EventsView(viewModel: viewModel)
+            }
+            // 2. Lempar environment appState agar EventDetailView bisa mengaksesnya
+            .environment(appState)
         }
         .fullScreenCover(isPresented: $appState.isRadarPresented) {
             HomeView()
@@ -166,9 +169,9 @@ struct EventMapView: View {
         .task { await viewModel.load() }
         .refreshable { await viewModel.load() }
     }
-
+    
     // MARK: - Overlay card (unified: preview + checked-in)
-
+    
     private func overlayCard(event: EventDTO, isCheckedIn: Bool) -> some View {
         // Card — tap opens radar (if checked in) or detail (if preview)
         Button {
@@ -195,7 +198,7 @@ struct EventMapView: View {
                     }
                     .clipped()
                     .clipShape(RoundedRectangle(cornerRadius: Radius.button))
-
+                
                 // Info
                 VStack(alignment: .leading, spacing: 4) {
                     if let cat = event.category {
@@ -280,9 +283,9 @@ struct EventMapView: View {
 private struct EventMapPin: View {
     let event: EventDTO
     var isActive: Bool = false
-
+    
     private let teal = Color(hex: 0x1E7082)
-
+    
     var body: some View {
         VStack(spacing: 4) {
             ZStack {
@@ -296,19 +299,19 @@ private struct EventMapPin: View {
                     .fill(isActive ? Color.coral : teal)
                     .frame(width: 48, height: 48)
                     .shadow(color: .black.opacity(0.22), radius: 6, y: 3)
-
+                
                 Image(systemName: isActive ? "checkmark" : categoryIcon)
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(.white)
             }
-
+            
             Text(event.name)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
         }
     }
-
+    
     private var categoryIcon: String {
         switch event.category?.lowercased() {
         case "concerts":    return "music.note"
@@ -328,7 +331,7 @@ struct EventSearchCover: View {
     @FocusState private var searchFocused: Bool
     @State private var sheetEventID: MapSheetEvent?
     private let teal = Color(hex: 0x1E7082)
-
+    
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -369,9 +372,9 @@ struct EventSearchCover: View {
         .onAppear { searchFocused = true }
         .onDisappear { viewModel.searchText = "" }
     }
-
+    
     // MARK: - Search results
-
+    
     private var searchResultsSection: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             if viewModel.searchResults.isEmpty {
@@ -386,9 +389,9 @@ struct EventSearchCover: View {
             }
         }
     }
-
+    
     // MARK: - Picked for you
-
+    
     @ViewBuilder
     private var pickedForYouSection: some View {
         if !viewModel.pickedForYou.isEmpty {
@@ -396,7 +399,7 @@ struct EventSearchCover: View {
                 Text("Events Picked for You")
                     .font(.headlineSmall)
                     .foregroundStyle(teal)
-
+                
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: Spacing.md) {
                         ForEach(viewModel.pickedForYou) { event in
@@ -412,17 +415,17 @@ struct EventSearchCover: View {
             }
         }
     }
-
+    
     // MARK: - Trending
-
+    
     private var trendingSection: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             Text("Trending Events")
                 .font(.headlineSmall)
                 .foregroundStyle(teal)
-
+            
             categoryChips
-
+            
             VStack(spacing: Spacing.md) {
                 ForEach(viewModel.trending) { event in
                     Button { sheetEventID = MapSheetEvent(id: event.id) } label: {
@@ -433,7 +436,7 @@ struct EventSearchCover: View {
             }
         }
     }
-
+    
     private var categoryChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Spacing.sm) {
@@ -473,20 +476,20 @@ struct EventSearchCover: View {
 
 private struct SearchPickedCard: View {
     let event: EventDTO
-
+    
     var body: some View {
         ZStack(alignment: .bottomLeading) {
             SearchEventImage(url: event.imageURL)
                 .frame(width: 220, height: 150)
                 .clipShape(RoundedRectangle(cornerRadius: Radius.card))
-
+            
             LinearGradient(colors: [.black.opacity(0.7), .clear], startPoint: .bottom, endPoint: .center)
                 .clipShape(RoundedRectangle(cornerRadius: Radius.card))
-
+            
             SearchPriceBadge(event: event)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .padding(Spacing.sm)
-
+            
             VStack(alignment: .leading, spacing: 2) {
                 Spacer()
                 Text(event.name)
@@ -506,13 +509,13 @@ private struct SearchPickedCard: View {
 
 private struct SearchEventRow: View {
     let event: EventDTO
-
+    
     var body: some View {
         HStack(spacing: Spacing.md) {
             SearchEventImage(url: event.imageURL)
                 .frame(width: 64, height: 64)
                 .clipShape(RoundedRectangle(cornerRadius: Radius.chip))
-
+            
             VStack(alignment: .leading, spacing: 4) {
                 Text(event.name)
                     .font(.titleSmall).foregroundStyle(Color(hex: 0x1E7082)).lineLimit(1)
@@ -523,7 +526,7 @@ private struct SearchEventRow: View {
                         .font(.labelSmall).foregroundStyle(Color(hex: 0x1E7082).opacity(0.6))
                 }
             }
-
+            
             Spacer(minLength: 0)
             SearchPriceBadge(event: event)
         }
@@ -537,7 +540,7 @@ private struct SearchEventRow: View {
 
 private struct SearchPriceBadge: View {
     let event: EventDTO
-
+    
     var body: some View {
         Text(label)
             .font(.labelSmall).foregroundStyle(.white)
@@ -545,7 +548,7 @@ private struct SearchPriceBadge: View {
             .padding(.horizontal, Spacing.sm).padding(.vertical, 4)
             .background(Color(hex: 0x1E7082), in: Capsule())
     }
-
+    
     private var label: String {
         guard let price = event.hargaTiket, price > 0 else { return "Free Entry" }
         return "From Rp\(Int(price).searchFormatted)"
@@ -554,7 +557,7 @@ private struct SearchPriceBadge: View {
 
 private struct SearchEventImage: View {
     let url: String?
-
+    
     var body: some View {
         if let url, let imageURL = URL(string: url) {
             AsyncImage(url: imageURL) { phase in
@@ -567,7 +570,7 @@ private struct SearchEventImage: View {
             placeholder
         }
     }
-
+    
     private var placeholder: some View {
         LinearGradient(colors: [Color.apricot, Color.coral],
                        startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -593,4 +596,10 @@ private extension Int {
         groups.insert(String(chars), at: 0)
         return groups.joined(separator: ",")
     }
+}
+
+#Preview("Event Map") {
+    EventMapView()
+        .environment(NavigationRouter())
+        .environment(AppState())
 }

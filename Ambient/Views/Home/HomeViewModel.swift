@@ -91,7 +91,13 @@ final class HomeViewModel {
         isConnecting = true
         defer { isConnecting = false }
 
-        let token = RadarToken.derive(from: userID)
+        // Derive a short stable 8-byte hex token from the user's UUID (first 8 bytes)
+        let token: String = {
+            let bytes = withUnsafeBytes(of: userID.uuid) { Array($0) } // 16 bytes
+            // Take first 8 bytes and format as 16 lowercase hex chars
+            return bytes.prefix(8).map { String(format: "%02x", $0) }.joined()
+        }()
+
         HapticManager.shared.startEngine()
         await EventRadarService.shared.start(eventID: event.id, ownRadarToken: token, ownUserID: userID, event: event)
         isConnected = true
@@ -227,3 +233,4 @@ final class HomeViewModel {
         }
     }
 }
+

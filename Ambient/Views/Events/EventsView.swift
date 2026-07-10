@@ -9,11 +9,9 @@ final class EventsViewModel {
     var isLoading: Bool = false
     var errorMessage: String? = nil
 
-    static let categories = ["Concerts", "Exhibitions", "Festivals", "Communities"]
+    // Disesuaikan urutannya agar sama persis dengan screenshot
+    static let categories = ["Exhibitions", "Festivals", "Communities", "Concerts"]
 
-    // Soonest-starting few, shown in the "Events Picked for You" carousel.
-    // No real personalization/curation backend yet — this is just the same
-    // sorted-by-start-date list the trending section uses, sliced down.
     var pickedForYou: [EventDTO] {
         Array(events.prefix(3))
     }
@@ -48,327 +46,375 @@ final class EventsViewModel {
 }
 
 struct EventsView: View {
-    @State private var viewModel = EventsViewModel()
-    @Environment(NavigationRouter.self) private var router
+    @Bindable var viewModel: EventsViewModel
+    @Environment(\.dismiss) private var dismiss
     @FocusState private var searchFocused: Bool
 
     var body: some View {
-        @Bindable var router = router
+        VStack(spacing: 0) {
+            // Header selalu menempel di atas (Search Bar + Category Chips)
+            pinnedHeader
 
-        ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.xxl) {
-                searchBar
-
-                if viewModel.isSearching {
-                    searchResultsSection
-                } else {
-                    pickedForYouSection
-                    trendingSection
+            // State Loading / Empty dipindahkan ke dalam agar tidak memblokir header
+            if viewModel.isLoading && viewModel.events.isEmpty {
+                Spacer()
+                ProgressView()
+                Spacer()
+            } else if viewModel.events.isEmpty {
+                Spacer()
+                ContentUnavailableView("No Events", systemImage: "calendar.badge.exclamationmark",
+                                       description: Text("No events available right now."))
+                Spacer()
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 24) {
+                        // Tampilkan hasil search JIKA sedang mencari atau sedang mengetik
+                        if viewModel.isSearching || searchFocused {
+                            searchResultsSection
+                        } else {
+                            pickedForYouSection
+                            
+                            Text("Trending Events")
+                                .font(.title3.weight(.bold))
+                                .foregroundStyle(.primary)
+                                .padding(.horizontal, 16)
+                            
+                            trendingListSection
+                        }
+                    }
+                    .padding(.top, 16)
+                    .padding(.bottom, 40)
                 }
+                .scrollDismissesKeyboard(.interactively) // UX: Tutup keyboard saat user scroll
             }
-            .padding(.horizontal, Spacing.lg)
-            .padding(.top, Spacing.md)
         }
-        .background(Color.peach.opacity(0.2))
+        .background(Color(white: 0.97).ignoresSafeArea())
         .navigationDestination(for: UUID.self) { eventID in
             EventDetailView(eventID: eventID)
         }
-        .overlay {
-            if viewModel.isLoading {
-                ProgressView()
-            } else if viewModel.events.isEmpty {
-                ContentUnavailableView("No Events", systemImage: "calendar.badge.exclamationmark",
-                                       description: Text("No events available right now."))
-            }
-        }
+        .toolbar(.hidden, for: .navigationBar)
         .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
             Button("OK") { viewModel.errorMessage = nil }
         } message: { Text(viewModel.errorMessage ?? "") }
-        .task { await viewModel.load() }
-        .refreshable { await viewModel.load() }
+    }
+
+    // MARK: - Fixed header (Search bar + Category chips)
+
+    private var pinnedHeader: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            searchBar
+                .padding(.horizontal, 16)
+
+            categoryChips
+        }
+        .padding(.top, 16)
+        .padding(.bottom, 8)
+        .background(Color(white: 0.97).ignoresSafeArea(edges: .top))
+        .zIndex(1)
     }
 
     // MARK: - Search bar
-
+    
     private var searchBar: some View {
-        HStack(spacing: Spacing.sm) {
-            HStack(spacing: Spacing.sm) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("Search events", text: $viewModel.searchText)
-                    .font(.bodyMedium)
-                    .focused($searchFocused)
-                if !viewModel.isSearching {
-                    Image(systemName: "mic.fill").foregroundStyle(.secondary)
-                }
+        HStack(spacing: 12) {
+            Button { dismiss() } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.black)
+                    .frame(width: 46, height: 46)
+                    .background(.white, in: Circle())
+                    .shadow(color: .black.opacity(0.06), radius: 8, y: 4)
             }
-            .padding(.horizontal, Spacing.md)
-            .padding(.vertical, Spacing.sm)
-            .background(Color.white.opacity(0.6), in: Capsule())
 
-            if viewModel.isSearching || searchFocused {
-                Button {
-                    viewModel.searchText = ""
-                    searchFocused = false
-                } label: {
-                    Image(systemName: "xmark")
-                        .foregroundStyle(Color.terracotta)
-                        .frame(width: 36, height: 36)
-                        .background(.white, in: Circle())
-                }
-            }
-        }
-    }
-
-    // MARK: - Search results (flat list)
-
-    private var searchResultsSection: some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
-            ForEach(viewModel.searchResults) { event in
-                Button { router.push(event.id) } label: {
-                    TrendingEventRow(event: event)
-                }
-                .buttonStyle(.plain)
-            }
-            if viewModel.searchResults.isEmpty {
-                Text("No events match \"\(viewModel.searchText)\".")
-                    .font(.bodyMedium)
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(.secondary)
-                    .padding(.top, Spacing.xl)
-            }
-        }
-    }
-
-    // MARK: - Picked for you
-
-    @ViewBuilder
-    private var pickedForYouSection: some View {
-        if !viewModel.pickedForYou.isEmpty {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                Text("Events Picked for You")
-                    .font(.headlineSmall)
-                    .foregroundStyle(Color.terracotta)
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: Spacing.md) {
-                        ForEach(viewModel.pickedForYou) { event in
-                            Button { router.push(event.id) } label: {
-                                PickedForYouCard(event: event)
-                            }
-                            .buttonStyle(.plain)
-                        }
+                
+                TextField("Search...", text: $viewModel.searchText)
+                    .font(.system(size: 16))
+                    .focused($searchFocused)
+                    .submitLabel(.search)
+                
+                if viewModel.searchText.isEmpty {
+                    Image(systemName: "mic")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.secondary)
+                } else {
+                    Button {
+                        viewModel.searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(Color(.systemGray3))
                     }
                 }
-                .padding(.horizontal, -Spacing.lg)
-                .padding(.leading, Spacing.lg)
             }
+            .padding(.horizontal, 16)
+            .frame(height: 46)
+            .background(.white, in: Capsule())
+            .shadow(color: .black.opacity(0.06), radius: 8, y: 4)
         }
     }
 
-    // MARK: - Trending
-
-    private var trendingSection: some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
-            Text("Trending Events")
-                .font(.headlineSmall)
-                .foregroundStyle(Color.terracotta)
-
-            categoryChips
-
-            VStack(spacing: Spacing.md) {
-                ForEach(viewModel.trending) { event in
-                    Button { router.push(event.id) } label: {
-                        TrendingEventRow(event: event)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-    }
+    // MARK: - Category Chips
 
     private var categoryChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Spacing.sm) {
+            HStack(spacing: 10) {
+                // Heart Icon (All)
                 Button {
                     viewModel.selectedCategory = nil
                 } label: {
                     Image(systemName: viewModel.selectedCategory == nil ? "heart.fill" : "heart")
-                        .foregroundStyle(viewModel.selectedCategory == nil ? .white : Color.terracotta)
-                        .frame(width: 36, height: 36)
-                        .background(viewModel.selectedCategory == nil ? Color.coral : Color.white.opacity(0.7),
-                                    in: Circle())
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(viewModel.selectedCategory == nil ? .white : .primary)
+                        .frame(width: 38, height: 38)
+                        .background(viewModel.selectedCategory == nil ? Color.primary : .white, in: Circle())
+                        .overlay(
+                            Circle().stroke(Color(white: 0.9), lineWidth: viewModel.selectedCategory == nil ? 0 : 1)
+                        )
                 }
 
+                // Categories
                 ForEach(EventsViewModel.categories, id: \.self) { category in
                     Button {
                         viewModel.selectedCategory = category
                     } label: {
                         Text(category)
-                            .font(.labelLarge)
-                            .foregroundStyle(viewModel.selectedCategory == category ? .white : Color.terracotta)
-                            .padding(.horizontal, Spacing.md)
-                            .padding(.vertical, Spacing.sm)
-                            .background(viewModel.selectedCategory == category ? Color.coral : Color.white.opacity(0.7),
-                                        in: Capsule())
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(viewModel.selectedCategory == category ? .white : .primary)
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 10)
+                            .background(viewModel.selectedCategory == category ? Color.primary : .white, in: Capsule())
+                            .overlay(
+                                Capsule().stroke(Color(white: 0.9), lineWidth: viewModel.selectedCategory == category ? 0 : 1)
+                            )
                     }
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+
+    // MARK: - Search results
+    
+    private var searchResultsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(viewModel.searchResults) { event in
+                NavigationLink(value: event.id) {
+                    SearchSuggestionRow(event: event) // Gunakan UI khusus search sesuai gambar
+                }
+                .buttonStyle(.plain)
+            }
+            if viewModel.searchResults.isEmpty && !viewModel.searchText.isEmpty {
+                Text("No events match \"\(viewModel.searchText)\".")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 24)
+            }
+        }
+        .padding(.horizontal, 16)
+    }
+
+    // MARK: - Picked for you
+    
+    @ViewBuilder
+    private var pickedForYouSection: some View {
+        if !viewModel.pickedForYou.isEmpty {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Events Picked for You")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 16)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 16) {
+                        ForEach(viewModel.pickedForYou) { event in
+                            NavigationLink(value: event.id) {
+                                PickedForYouCard(event: event)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 16)
                 }
             }
         }
     }
+
+    // MARK: - Trending List
+
+    private var trendingListSection: some View {
+        VStack(spacing: 16) {
+            ForEach(viewModel.trending) { event in
+                NavigationLink(value: event.id) {
+                    TrendingEventRow(event: event)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 16)
+    }
 }
 
-// MARK: - Cards
+// MARK: - Cards (UI Components)
 
+// 1. Desain Card Baru untuk hasil pencarian
+private struct SearchSuggestionRow: View {
+    let event: EventDTO
+    
+    private let badgeColor = Color(red: 0.88, green: 0.28, blue: 0.1) // Terracotta
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Circle()
+                .stroke(badgeColor, lineWidth: 1.5)
+                .frame(width: 44, height: 44)
+                .overlay(
+                    Image(systemName: categoryIcon)
+                        .font(.system(size: 18))
+                        .foregroundStyle(badgeColor)
+                )
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(event.name)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                
+                Text(event.locationName ?? "")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(.white, in: RoundedRectangle(cornerRadius: 16))
+        .shadow(color: .black.opacity(0.04), radius: 8, y: 4)
+    }
+    
+    private var categoryIcon: String {
+        switch event.category?.lowercased() {
+        case "concerts":    return "music.note"
+        case "exhibitions": return "party.popper"
+        case "festivals":   return "sparkles"
+        case "communities": return "person.2"
+        default:            return "calendar"
+        }
+    }
+}
+
+
+// 2. Picked for You Card
 private struct PickedForYouCard: View {
     let event: EventDTO
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
             EventImage(url: event.imageURL)
-                .frame(width: 260, height: 170)
-                .clipShape(RoundedRectangle(cornerRadius: Radius.card))
+                .frame(width: 280, height: 180)
+                .clipShape(RoundedRectangle(cornerRadius: 20))
 
             LinearGradient(
-                colors: [.black.opacity(0.75), .black.opacity(0.15), .clear],
+                colors: [.black.opacity(0.8), .black.opacity(0.2), .clear],
                 startPoint: .bottom, endPoint: .center
             )
-            .clipShape(RoundedRectangle(cornerRadius: Radius.card))
+            .clipShape(RoundedRectangle(cornerRadius: 20))
 
-            // Anchored independently to top-leading — without this it inherits
-            // the ZStack's own .bottomLeading alignment and collapses into the
-            // same corner as the title/date block below, overlapping it.
-            PriceBadge(event: event, size: .small)
+            PriceBadge(event: event)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .padding(Spacing.md)
+                .padding(12)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Spacer()
                 Text(event.name)
-                    .font(.titleMedium)
+                    .font(.title2.weight(.bold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                 Text(event.locationName ?? "")
-                    .font(.labelSmall)
-                    .foregroundStyle(.white.opacity(0.85))
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.9))
 
-                HStack {
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar")
                     if let start = event.startAt {
-                        HStack(spacing: 4) {
-                            Image(systemName: "calendar")
-                                .font(.caption2)
-                                .foregroundStyle(.white)
-                                .frame(width: 18, height: 18)
-                                .background(.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 5))
-                            Text(start.formatted(dotStyle: true))
-                                .font(.labelSmall)
-                                .foregroundStyle(.white)
-                        }
+                        Text(start.formatted(dotStyle: true))
                     }
-                    Spacer()
-                    AttendeeStack(event: event, dark: true, size: .small)
                 }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.white)
+                .padding(.top, 4)
             }
-            .padding(Spacing.md)
+            .padding(16)
         }
-        .frame(width: 260, height: 170)
+        .frame(width: 280, height: 180)
     }
 }
 
+// 3. Trending Event Row
 private struct TrendingEventRow: View {
     let event: EventDTO
 
     var body: some View {
-        HStack(spacing: Spacing.md) {
+        HStack(spacing: 16) {
             EventImage(url: event.imageURL)
-                .frame(width: 64, height: 64)
-                .clipShape(RoundedRectangle(cornerRadius: Radius.chip))
+                .frame(width: 90, height: 90)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(event.name)
-                    .font(.titleSmall)
-                    .foregroundStyle(Color.terracotta)
-                    .lineLimit(1)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                
                 Text(event.locationName ?? "")
-                    .font(.labelSmall)
+                    .font(.system(size: 13))
                     .foregroundStyle(.secondary)
-                HStack {
+                    .lineLimit(1)
+                
+                HStack(spacing: 4) {
+                    Image(systemName: "calendar")
                     if let start = event.startAt {
-                        Label(start.formatted(dotStyle: true), systemImage: "calendar")
-                            .font(.labelSmall)
-                            .foregroundStyle(.secondary)
+                        Text(start.formatted(dotStyle: true))
                     }
-                    Spacer()
-                    AttendeeStack(event: event, dark: false)
                 }
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
             }
 
             Spacer(minLength: 0)
-            PriceBadge(event: event)
+            
+            VStack {
+                PriceBadge(event: event)
+                Spacer()
+            }
         }
-        .padding(Spacing.md)
-        .background(.white, in: RoundedRectangle(cornerRadius: Radius.card))
-        .shadow(color: Color.terracotta.opacity(0.08), radius: 6, y: 2)
+        .padding(12)
+        .background(.white, in: RoundedRectangle(cornerRadius: 20))
+        .shadow(color: .black.opacity(0.04), radius: 10, y: 4)
     }
 }
-
-private enum BadgeSize { case small, large }
 
 private struct PriceBadge: View {
     let event: EventDTO
-    var size: BadgeSize = .small
+    
+    private let badgeColor = Color(red: 0.88, green: 0.28, blue: 0.1)
 
     var body: some View {
         Text(label)
-            .font(size == .large ? .labelMedium : .labelSmall)
+            .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(.white)
-            .lineLimit(1)
-            .minimumScaleFactor(0.75)
-            .frame(width: size == .large ? 100 : 88)
-            .padding(.horizontal, size == .large ? Spacing.md : Spacing.sm)
-            .padding(.vertical, size == .large ? Spacing.sm : 4)
-            .background(Color.coral, in: Capsule())
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(badgeColor, in: Capsule())
     }
 
-    // Always the same "From RpX" shape (never abbreviated to "425k") so every
-    // badge in a list renders at the same size regardless of price magnitude.
     private var label: String {
         guard let price = event.hargaTiket, price > 0 else { return "Free Entry" }
-        return "From Rp\(Int(price).formattedThousands)"
-    }
-}
-
-// Real initials of a few joined attendees, per the "no fully anonymous"
-// product decision — deliberately just initials (never a full nickname or
-// a photo) even here, to keep the exposure minimal.
-private struct AttendeeStack: View {
-    let event: EventDTO
-    let dark: Bool
-    var size: BadgeSize = .small
-
-    private var diameter: CGFloat { size == .large ? 40 : 22 }
-    private var overlap: CGFloat { size == .large ? -12 : -8 }
-    private var borderWidth: CGFloat { size == .large ? 2.5 : 1.5 }
-    private var fontSize: CGFloat { size == .large ? 15 : 9 }
-
-    var body: some View {
-        if event.attendeeCount > 0 {
-            HStack(spacing: overlap) {
-                ForEach(Array(event.attendeeInitials.prefix(3).enumerated()), id: \.offset) { index, initial in
-                    Circle()
-                        .fill(Color.apricot)
-                        .frame(width: diameter, height: diameter)
-                        .overlay(Text(initial).font(.system(size: fontSize, weight: .bold)).foregroundStyle(Color.terracotta))
-                        .overlay(Circle().stroke(dark ? .white : Color.peach.opacity(0.2), lineWidth: borderWidth))
-                }
-                let overflow = event.attendeeCount - min(event.attendeeInitials.count, 3)
-                if overflow > 0 {
-                    Circle()
-                        .fill(Color.coral)
-                        .frame(width: diameter, height: diameter)
-                        .overlay(Text("+\(overflow)").font(.system(size: fontSize - 1, weight: .bold)).foregroundStyle(.white))
-                        .overlay(Circle().stroke(dark ? .white : Color.peach.opacity(0.2), lineWidth: borderWidth))
-                }
-            }
-        }
+        return "From Rp\(Int(price).formattedK)"
     }
 }
 
@@ -389,9 +435,11 @@ private struct EventImage: View {
     }
 
     private var placeholder: some View {
-        LinearGradient(colors: [Color.apricot, Color.coral], startPoint: .topLeading, endPoint: .bottomTrailing)
+        Color(white: 0.9)
     }
 }
+
+// MARK: - Extensions
 
 private extension Date {
     func formatted(dotStyle: Bool) -> String {
@@ -402,16 +450,16 @@ private extension Date {
 }
 
 private extension Int {
-    // Manual comma grouping so the "From Rp50,000" style matches the
-    // reference design regardless of the device's region format.
-    var formattedThousands: String {
-        var chars = Array(String(self))
-        var groups: [String] = []
-        while chars.count > 3 {
-            groups.insert(String(chars.suffix(3)), at: 0)
-            chars.removeLast(3)
+    var formattedK: String {
+        if self >= 1000 {
+            return "\(self / 1000)k"
         }
-        groups.insert(String(chars), at: 0)
-        return groups.joined(separator: ",")
+        return "\(self)"
+    }
+}
+
+#Preview("Events View") {
+    NavigationStack {
+        EventsView(viewModel: EventsViewModel())
     }
 }

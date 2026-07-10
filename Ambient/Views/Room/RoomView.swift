@@ -233,3 +233,10 @@ struct RoomView: View {
     }
 }
 
+#Preview("Matches") {
+    NavigationStack {
+        MatchesView()
+            .environment(NavigationRouter())
+            .environment(AppState())
+    }
+}
