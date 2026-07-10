@@ -264,13 +264,19 @@ struct RoomDTO: Sendable, Identifiable {
     let eventID: UUID?
     let eventName: String?
     let createdAt: Date?
+    let updatedAt: Date?
+    /// Who sent the most recent chat message (nil if no messages yet) — lets the
+    /// client tell "peer sent a new message" apart from "I sent the last one".
+    let lastMessageSenderID: UUID?
+    /// Preview text of the most recent chat message (nil if no messages yet).
+    let lastMessageText: String?
     /// true = current user was the first pinger (userA) → UWB guest/initiator
     let isInitiator: Bool
 }
 
 extension RoomDTO: Codable {
     private enum CodingKeys: CodingKey {
-        case id, codeRoom, peerUserID, peerNickname, peerAge, eventID, eventName, createdAt, isInitiator
+        case id, codeRoom, peerUserID, peerNickname, peerAge, eventID, eventName, createdAt, updatedAt, lastMessageSenderID, lastMessageText, isInitiator
     }
     nonisolated init(from decoder: any Decoder) throws {
         let c        = try decoder.container(keyedBy: CodingKeys.self)
@@ -282,6 +288,9 @@ extension RoomDTO: Codable {
         eventID      = try c.decodeIfPresent(UUID.self,   forKey: .eventID)
         eventName    = try c.decodeIfPresent(String.self, forKey: .eventName)
         createdAt    = try c.decodeIfPresent(Date.self,   forKey: .createdAt)
+        updatedAt    = try c.decodeIfPresent(Date.self,   forKey: .updatedAt)
+        lastMessageSenderID = try c.decodeIfPresent(UUID.self, forKey: .lastMessageSenderID)
+        lastMessageText = try c.decodeIfPresent(String.self, forKey: .lastMessageText)
         isInitiator  = try c.decodeIfPresent(Bool.self,   forKey: .isInitiator) ?? false
     }
     nonisolated func encode(to encoder: any Encoder) throws {
@@ -294,6 +303,9 @@ extension RoomDTO: Codable {
         try c.encodeIfPresent(eventID,   forKey: .eventID)
         try c.encodeIfPresent(eventName, forKey: .eventName)
         try c.encodeIfPresent(createdAt, forKey: .createdAt)
+        try c.encodeIfPresent(updatedAt, forKey: .updatedAt)
+        try c.encodeIfPresent(lastMessageSenderID, forKey: .lastMessageSenderID)
+        try c.encodeIfPresent(lastMessageText, forKey: .lastMessageText)
         try c.encode(isInitiator, forKey: .isInitiator)
     }
 }

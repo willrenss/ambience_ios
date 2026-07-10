@@ -28,6 +28,23 @@ struct HomeView: View {
         .onAppear {
             Task { await viewModel.start(appState: appState) }
         }
+        .task {
+            // Fast, reliable chat-bubble badge — polls /matches every 5s while radar is
+            // visible and recomputes the unread set directly, the same way the chat list
+            // does. SwiftUI auto-cancels this when HomeView disappears.
+            let ownUserID = appState.currentUser?.id
+            while !Task.isCancelled {
+                await viewModel.refreshUnread(appState: appState, ownUserID: ownUserID)
+                try? await Task.sleep(for: .seconds(5))
+            }
+        }
+        .onDisappear {
+            // Without this, tab-switching away (or dismissing without checking out)
+            // leaves the old usersTask/eventsTask running with self weakly nil —
+            // a zombie consumer racing the next subscribeStreams() for events on
+            // the same non-broadcast AsyncStream.
+            viewModel.stop()
+        }
         .sheet(item: $selectedUser) { user in
             RadarCardSheet(user: user) {
                 Task { await viewModel.sendPing(to: user, appState: appState) }
@@ -43,8 +60,13 @@ struct HomeView: View {
         }) {
             PingNotificationLogSheet(
                 pings: viewModel.receivedPings,
+                matches: viewModel.recentMatches,
                 nearbyUsers: viewModel.nearbyUsers,
-                onSelectUser: { user in pendingSelectedUser = user }
+                onSelectUser: { user in pendingSelectedUser = user },
+                onSelectMatch: {
+                    showNotificationLog = false
+                    appState.selectedTab = .bookmarks
+                }
             )
         }
         .onChange(of: viewModel.pendingRoomID) { _, roomID in
@@ -65,11 +87,13 @@ struct HomeView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .mutualMatchCreated)) { note in
+            // This fires from the user's own completing Back Tap ping, so — like the
+            // in-app sendPing completer path — still navigates straight into the room.
             guard let roomID = note.object as? UUID else { return }
             let peerUserID = note.userInfo?["peerUserID"] as? UUID
             if let peerUserID { viewModel.receivedPings.removeAll { $0.fromUserID == peerUserID } }
             Task {
-                let resolved = await viewModel.resolveRoom(roomID: roomID, peerUserID: peerUserID)
+                let (resolved, _) = await viewModel.resolveRoom(roomID: roomID, peerUserID: peerUserID)
                 router.push(resolved)
             }
         }
@@ -154,7 +178,7 @@ struct HomeView: View {
                             .foregroundStyle(viewModel.isConnected ? Color.terracotta : .white)
                             .frame(width: 36, height: 36)
                             .background(.white.opacity(viewModel.isConnected ? 1 : 0.18), in: Circle())
-                        if !viewModel.receivedPings.isEmpty {
+                        if !viewModel.receivedPings.isEmpty || !viewModel.recentMatches.isEmpty {
                             Circle()
                                 .fill(Color.coral)
                                 .frame(width: 10, height: 10)
@@ -165,11 +189,19 @@ struct HomeView: View {
 
                 // Chat — switches to matches tab
                 Button { appState.selectedTab = .bookmarks } label: {
-                    Image(systemName: "bubble.left.and.bubble.right")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(viewModel.isConnected ? Color.terracotta : .white)
-                        .frame(width: 36, height: 36)
-                        .background(.white.opacity(viewModel.isConnected ? 1 : 0.18), in: Circle())
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: "bubble.left.and.bubble.right")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(viewModel.isConnected ? Color.terracotta : .white)
+                            .frame(width: 36, height: 36)
+                            .background(.white.opacity(viewModel.isConnected ? 1 : 0.18), in: Circle())
+                        if appState.hasUnseenMatches {
+                            Circle()
+                                .fill(Color.coral)
+                                .frame(width: 10, height: 10)
+                                .offset(x: 2, y: -2)
+                        }
+                    }
                 }
 
                 // Check out
@@ -371,8 +403,10 @@ private struct PingNotificationCard: View {
 
 private struct PingNotificationLogSheet: View {
     let pings: [PingNotificationDTO]
+    let matches: [RoomDTO]
     let nearbyUsers: [NearbyUser]
     var onSelectUser: (NearbyUser) -> Void
+    var onSelectMatch: () -> Void
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -382,33 +416,55 @@ private struct PingNotificationLogSheet: View {
                 .frame(width: 36, height: 4)
                 .padding(.top, Spacing.md)
 
-            Text("Pings")
+            Text("Notifications")
                 .font(.system(size: 17, weight: .semibold))
                 .padding(.vertical, Spacing.md)
 
             Divider()
 
-            if pings.isEmpty {
+            if pings.isEmpty && matches.isEmpty {
                 ContentUnavailableView(
-                    "No Pings Yet",
+                    "Nothing Yet",
                     systemImage: "bell.slash",
-                    description: Text("When someone pings you, they'll appear here.")
+                    description: Text("Pings and matches will appear here.")
                 )
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(pings) { ping in
-                            let nearbyUser = nearbyUsers.first { $0.id == ping.fromUserID }
-                            Button {
-                                if let user = nearbyUser {
-                                    onSelectUser(user)
-                                    dismiss()
+                    LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                        if !matches.isEmpty {
+                            Section {
+                                ForEach(matches) { room in
+                                    Button {
+                                        onSelectMatch()
+                                        dismiss()
+                                    } label: {
+                                        MatchLogRow(room: room)
+                                    }
+                                    .buttonStyle(.plain)
+                                    Divider().padding(.leading, 72)
                                 }
-                            } label: {
-                                PingLogRow(ping: ping, isNearby: nearbyUser != nil)
+                            } header: {
+                                LogSectionHeader(title: "Matches")
                             }
-                            .buttonStyle(.plain)
-                            Divider().padding(.leading, 72)
+                        }
+                        if !pings.isEmpty {
+                            Section {
+                                ForEach(pings) { ping in
+                                    let nearbyUser = nearbyUsers.first { $0.id == ping.fromUserID }
+                                    Button {
+                                        if let user = nearbyUser {
+                                            onSelectUser(user)
+                                            dismiss()
+                                        }
+                                    } label: {
+                                        PingLogRow(ping: ping, isNearby: nearbyUser != nil)
+                                    }
+                                    .buttonStyle(.plain)
+                                    Divider().padding(.leading, 72)
+                                }
+                            } header: {
+                                LogSectionHeader(title: "Pings")
+                            }
                         }
                     }
                 }
@@ -416,6 +472,54 @@ private struct PingNotificationLogSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.hidden)
+    }
+}
+
+private struct LogSectionHeader: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, Spacing.lg)
+            .padding(.vertical, Spacing.sm)
+            .background(.white)
+    }
+}
+
+private struct MatchLogRow: View {
+    let room: RoomDTO
+
+    var body: some View {
+        HStack(spacing: Spacing.md) {
+            Circle()
+                .fill(Color.successGreen.opacity(0.25))
+                .frame(width: 48, height: 48)
+                .overlay(
+                    Text(String(room.peerNickname.prefix(1)).uppercased())
+                        .font(.system(.title3, design: .rounded).weight(.semibold))
+                        .foregroundStyle(Color.terracotta)
+                )
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("\(room.peerNickname), \(room.peerAge)")
+                    .font(.system(size: 15, weight: .semibold))
+                Text("You matched! Tap to open chat 💬")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, Spacing.lg)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
     }
 }
 

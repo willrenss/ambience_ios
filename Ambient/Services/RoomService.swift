@@ -64,7 +64,7 @@ actor RoomService {
         }
         streamContinuation = capturedContinuation
 
-        let task = URLSession.shared.webSocketTask(with: url)
+        let task = WebSocketSession.shared.webSocketTask(with: url)
         webSocketTask = task
         task.resume()
         receiveTask = Task { await receiveLoop(task: task, continuation: capturedContinuation, generation: myGeneration) }

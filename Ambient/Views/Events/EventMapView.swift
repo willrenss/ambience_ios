@@ -10,7 +10,6 @@ struct EventMapView: View {
     @State private var isSearchActive = false
     @State private var sheetEvent: MapSheetEvent?
     @State private var isFavorited = false
-    @State private var isRadarPresented = false
     @State private var previewEvent: EventDTO?   // event currently shown in overlay
     @State private var cameraPosition: MapCameraPosition = .region(
         MKCoordinateRegion(
@@ -25,6 +24,7 @@ struct EventMapView: View {
 
     var body: some View {
         @Bindable var viewModel = viewModel
+        @Bindable var appState = appState
 
         ZStack {
             // Full-screen map
@@ -41,7 +41,7 @@ struct EventMapView: View {
                         )
                         .onTapGesture {
                             if appState.activeEvent?.id == event.id {
-                                isRadarPresented = true
+                                appState.isRadarPresented = true
                             } else {
                                 previewEvent = event
                             }
@@ -144,7 +144,7 @@ struct EventMapView: View {
             // EventDetailView fully dismissed — now safe to open radar if user checked in.
             if appState.activeEvent != nil {
                 appState.shouldAutoConnectRadar = true
-                isRadarPresented = true
+                appState.isRadarPresented = true
             }
         }) { e in
             EventDetailView(eventID: e.id)
@@ -154,12 +154,12 @@ struct EventMapView: View {
                 isSearchActive = false
             })
         }
-        .fullScreenCover(isPresented: $isRadarPresented) {
+        .fullScreenCover(isPresented: $appState.isRadarPresented) {
             HomeView()
         }
         .onChange(of: appState.activeEvent) { _, event in
             if event == nil {
-                isRadarPresented = false
+                appState.isRadarPresented = false
                 previewEvent = nil
             }
         }
@@ -173,7 +173,7 @@ struct EventMapView: View {
         // Card — tap opens radar (if checked in) or detail (if preview)
         Button {
             if isCheckedIn {
-                isRadarPresented = true
+                appState.isRadarPresented = true
             } else {
                 sheetEvent = MapSheetEvent(id: event.id)
             }

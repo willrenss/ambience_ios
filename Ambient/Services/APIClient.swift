@@ -8,6 +8,21 @@ enum APIError: Error, Sendable {
     case unknown(Error)
 }
 
+/// Dedicated session for long-lived WebSocket tasks (radar + room sockets).
+///
+/// Mixing `URLSessionWebSocketTask` and REST `URLSessionDataTask` on the same
+/// session — especially `URLSession.shared` — lets an open socket occupy the
+/// per-host connection pool, so REST requests can stall behind it until the 60s
+/// request timeout (observed as "opening a chat makes everything slow for ~1 min,
+/// then it's fine"). Keeping sockets on their own session leaves the REST pool free.
+enum WebSocketSession {
+    static let shared: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.httpMaximumConnectionsPerHost = 8
+        return URLSession(configuration: config)
+    }()
+}
+
 actor APIClient {
     static let shared = APIClient()
 

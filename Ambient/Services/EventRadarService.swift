@@ -13,18 +13,25 @@ enum RadarEvent: Sendable {
 actor EventRadarService {
     static let shared = EventRadarService()
 
-    private(set) var nearbyUsersStream: AsyncStream<[NearbyUser]>
-    private var usersContinuation: AsyncStream<[NearbyUser]>.Continuation?
-    // Cached so new subscribers can read the current roster immediately on re-subscribe
+    // Multi-subscriber broadcast. HomeView's consumer is torn down and recreated on
+    // every tab switch (radar↔chat), and re-iterating a *single* AsyncStream across a
+    // cancelled-then-recreated consumer silently degrades delivery after the first
+    // cycle — the "works once, then stops" symptom. Each subscriber instead gets its
+    // own stream (keyed below); every yield fans out to all live subscribers, and a
+    // cancelled subscriber removes itself via onTermination. A short-lived overlap of
+    // an old (dying) and new consumer is harmless — both receive the event.
+    private var usersSubscribers: [UUID: AsyncStream<[NearbyUser]>.Continuation] = [:]
+    private var eventSubscribers: [UUID: AsyncStream<RadarEvent>.Continuation] = [:]
+    // Cached so a new subscriber can read the current roster immediately on subscribe.
     private(set) var currentNearbyUsers: [NearbyUser] = []
-    private(set) var eventStream: AsyncStream<RadarEvent>
-    private var eventContinuation: AsyncStream<RadarEvent>.Continuation?
 
     private var eventID: UUID?
     private var ownRadarToken: String = ""
+    private var ownUserID: UUID?
 
     private var roster: [String: EventRadarUserDTO] = [:]  // radarToken → identity + GPS
     private var seenPingIDs: Set<UUID> = []
+    private var seenMatchRoomIDs: Set<UUID> = []
 
     // WebSocket
     private var wsTask: URLSessionWebSocketTask?
@@ -51,30 +58,52 @@ actor EventRadarService {
 
     // MARK: - Lifecycle
 
-    private init() {
-        var uc: AsyncStream<[NearbyUser]>.Continuation?
-        nearbyUsersStream = AsyncStream(bufferingPolicy: .bufferingNewest(1)) { uc = $0 }
-        usersContinuation = uc
-        var ec: AsyncStream<RadarEvent>.Continuation?
-        eventStream = AsyncStream(bufferingPolicy: .unbounded) { ec = $0 }
-        eventContinuation = ec
+    private init() {}
+
+    // MARK: - Broadcast subscriptions
+
+    // A new radar-blip subscription. Seeds nothing itself — the consumer reads
+    // `currentNearbyUsers` first for an immediate value, then awaits updates here.
+    func userUpdates() -> AsyncStream<[NearbyUser]> {
+        let id = UUID()
+        return AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
+            usersSubscribers[id] = continuation
+            continuation.onTermination = { [weak self] _ in
+                Task { await self?.removeSubscriber(usersID: id) }
+            }
+        }
     }
 
-    private func makeStreams() {
-        var uc: AsyncStream<[NearbyUser]>.Continuation?
-        nearbyUsersStream = AsyncStream(bufferingPolicy: .bufferingNewest(1)) { uc = $0 }
-        usersContinuation = uc
-        var ec: AsyncStream<RadarEvent>.Continuation?
-        eventStream = AsyncStream(bufferingPolicy: .unbounded) { ec = $0 }
-        eventContinuation = ec
+    // A new radar-event subscription (pings, mutual matches, left-radius).
+    func events() -> AsyncStream<RadarEvent> {
+        let id = UUID()
+        return AsyncStream(bufferingPolicy: .unbounded) { continuation in
+            eventSubscribers[id] = continuation
+            continuation.onTermination = { [weak self] _ in
+                Task { await self?.removeSubscriber(eventID: id) }
+            }
+        }
     }
 
-    func start(eventID: UUID, ownRadarToken: String, event: EventDTO) async {
+    private func removeSubscriber(usersID: UUID) { usersSubscribers[usersID] = nil }
+    private func removeSubscriber(eventID: UUID)  { eventSubscribers[eventID] = nil }
+
+    private func broadcastUsers(_ users: [NearbyUser]) {
+        for c in usersSubscribers.values { c.yield(users) }
+    }
+
+    func start(eventID: UUID, ownRadarToken: String, ownUserID: UUID, event: EventDTO) async {
         self.eventID      = eventID
         self.ownRadarToken = ownRadarToken
+        self.ownUserID    = ownUserID
         roster.removeAll()
         seenPingIDs.removeAll()
-        makeStreams()
+        // Seed with matches that already existed before this session so they aren't
+        // re-announced as brand-new — only rooms created *during* this radar session
+        // should surface via .mutualMatch. Unread-message state is derived separately
+        // and durably in AppState, so it needs no baseline here.
+        let existingRooms = (try? await MatchService.shared.fetchMatches()) ?? []
+        seenMatchRoomIDs = Set(existingRooms.map(\.id))
 
         await LocationService.shared.requestPermissionAndStart()
 
@@ -106,7 +135,7 @@ actor EventRadarService {
         ownHeading  = 0
         roster.removeAll()
         currentNearbyUsers = []
-        usersContinuation?.yield([])
+        broadcastUsers([])
     }
 
     // MARK: - Own position (called from streaming loops)
@@ -131,14 +160,14 @@ actor EventRadarService {
         wsGeneration += 1
         let gen = wsGeneration
         guard let url = await APIClient.shared.webSocketURL(path: "/ws/radar/\(eventID.uuidString)") else { return }
-        let task = URLSession.shared.webSocketTask(with: url)
+        let task = WebSocketSession.shared.webSocketTask(with: url)
         wsTask = task
         task.resume()
         let service = EventRadarService.shared
-        wsReceiveTask = Task { await service.wsReceiveLoop(task: task, generation: gen) }
+        wsReceiveTask = Task { await service.wsReceiveLoop(eventID: eventID, task: task, generation: gen) }
     }
 
-    private func wsReceiveLoop(task: URLSessionWebSocketTask, generation: Int) async {
+    private func wsReceiveLoop(eventID: UUID, task: URLSessionWebSocketTask, generation: Int) async {
         while !Task.isCancelled {
             do {
                 let msg = try await task.receive()
@@ -151,6 +180,15 @@ actor EventRadarService {
                 }
             } catch { break }
         }
+        // Connection dropped (network blip, idle timeout, brief backgrounding).
+        // Without reconnecting, we'd silently downgrade to the ~30s poll fallback
+        // for the rest of the session — reconnect as long as this generation and
+        // event are still the active one (i.e. this wasn't superseded by a newer
+        // connection or a stop()).
+        guard !Task.isCancelled, wsGeneration == generation, self.eventID == eventID else { return }
+        try? await Task.sleep(for: .seconds(2))
+        guard !Task.isCancelled, wsGeneration == generation, self.eventID == eventID else { return }
+        await connectWebSocket(eventID: eventID)
     }
 
     private func handleWSText(_ text: String) {
@@ -179,15 +217,15 @@ actor EventRadarService {
                   let ping = try? wsDecoder.decode(PingNotificationDTO.self, from: pd),
                   !seenPingIDs.contains(ping.fromUserID) else { return }
             seenPingIDs.insert(ping.fromUserID)
-            eventContinuation?.yield(.pingReceived(ping))
+            emit(.pingReceived(ping))
 
         case "mutual_match":
             guard let pd = msg.payload.data(using: .utf8),
                   let mm = try? wsDecoder.decode(MutualMatchWS.self, from: pd) else { return }
-            eventContinuation?.yield(.mutualMatch(roomID: mm.roomID, peerUserID: mm.peerUserID))
+            recordMutualMatch(roomID: mm.roomID, peerUserID: mm.peerUserID)
 
         case "left_radius":
-            eventContinuation?.yield(.leftRadius(distanceMeters: 0))
+            emit(.leftRadius(distanceMeters: 0))
 
         default: break
         }
@@ -221,23 +259,35 @@ actor EventRadarService {
         }
     }
 
-    // Roster sync fallback — positions come via WS so interval can be long
+    // Fallback poll for when the WebSocket isn't delivering (down, backgrounded, flaky
+    // local network). Positions still come via WS in real-time, but pings and mutual
+    // matches must feel prompt even when WS is silent, so this runs every 5s and checks
+    // all three each tick — that bounds worst-case latency to ~5s instead of the old
+    // ~30s. Unread-message detection is NOT here; it's a direct poll in HomeView (see
+    // HomeViewModel.refreshUnread) so the chat-bubble badge stays as snappy and reliable
+    // as the chat list, independent of this stream.
     private func pollLoop() async {
-        var tick = 0
         while !Task.isCancelled {
             guard let id = eventID else { break }
             if let list = try? await EventService.shared.fetchRadar(eventID: id) {
                 roster = Dictionary(uniqueKeysWithValues: list.map { ($0.radarToken, $0) })
                 yieldUsers()
             }
-            if tick % 2 == 0, let pings = try? await PingService.shared.notifications(eventID: id) {
+            if let pings = try? await PingService.shared.notifications(eventID: id) {
                 for ping in pings where !seenPingIDs.contains(ping.fromUserID) {
                     seenPingIDs.insert(ping.fromUserID)
-                    eventContinuation?.yield(.pingReceived(ping))
+                    emit(.pingReceived(ping))
                 }
             }
-            tick += 1
-            try? await Task.sleep(for: .seconds(15))
+            // Fallback for mutual matches missed over WS (e.g. app was backgrounded when
+            // the peer's reciprocal ping came in) — without this, the original pinger
+            // would only ever learn about it by pinging again themselves.
+            if let rooms = try? await MatchService.shared.fetchMatches() {
+                for room in rooms where !seenMatchRoomIDs.contains(room.id) {
+                    recordMutualMatch(roomID: room.id, peerUserID: room.peerUserID)
+                }
+            }
+            try? await Task.sleep(for: .seconds(5))
         }
     }
 
@@ -262,7 +312,17 @@ actor EventRadarService {
     }
 
     var currentEventID: UUID? { eventID }
-    func emit(_ event: RadarEvent) { eventContinuation?.yield(event) }
+    func emit(_ event: RadarEvent) {
+        for c in eventSubscribers.values { c.yield(event) }
+    }
+
+    // Shared by the WS "mutual_match" push and the poll fallback below so a match
+    // discovered either way is only ever surfaced to the UI once.
+    private func recordMutualMatch(roomID: UUID, peerUserID: UUID?) {
+        guard !seenMatchRoomIDs.contains(roomID) else { return }
+        seenMatchRoomIDs.insert(roomID)
+        emit(.mutualMatch(roomID: roomID, peerUserID: peerUserID))
+    }
 
     // MARK: - Build radar blips (GPS-only)
 
@@ -287,7 +347,7 @@ actor EventRadarService {
                 distance: max(distance, 0.5), direction: direction, hasRealPosition: true)
         }
         currentNearbyUsers = users
-        usersContinuation?.yield(users)
+        broadcastUsers(users)
     }
 
     // MARK: - Geo helpers

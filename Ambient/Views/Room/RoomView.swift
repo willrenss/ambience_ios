@@ -4,6 +4,7 @@ struct RoomView: View {
     let roomID: UUID
     @State private var viewModel = RoomViewModel()
     @Environment(NavigationRouter.self) private var router
+    @Environment(AppState.self) private var appState
     @Environment(\.openURL) private var openURL
     @FocusState private var isComposerFocused: Bool
 
@@ -30,7 +31,19 @@ struct RoomView: View {
         .task(id: roomID) {
             await viewModel.load(id: roomID)
         }
+        .onAppear {
+            // Optimistically clear the badge on entry; the message-timestamp watchers
+            // below then pin the watermark to the newest message (server clock) so it
+            // survives clock skew and covers messages that arrive while we're reading.
+            appState.markRoomSeen(roomID: roomID, upTo: Date())
+        }
+        .onChange(of: viewModel.messages.last?.timestamp) { _, latest in
+            if let latest { appState.markRoomSeen(roomID: roomID, upTo: latest) }
+        }
         .onDisappear {
+            if let latest = viewModel.messages.last?.timestamp {
+                appState.markRoomSeen(roomID: roomID, upTo: latest)
+            }
             viewModel.cleanup()
         }
     }
