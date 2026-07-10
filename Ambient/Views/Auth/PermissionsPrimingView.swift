@@ -1,119 +1,228 @@
 import SwiftUI
 
-// Shown once, right after account creation. Each step explains *why* we need
-// a permission before the system dialog appears (priming), then triggers the
-// real OS prompt on tap. Location and Bluetooth are required to continue;
-// Notifications alone is skippable per the mockup.
+// Shown once, right after account creation.
 struct PermissionsPrimingView: View {
     @Environment(AppState.self) private var appState
     @State private var step: Int = 0
-    private let stepCount = 3
-
+    private let stepCount = 4 // Diubah menjadi 4 untuk mengakomodasi halaman Welcome
+    
+    // Theme Colors
+    let tealButton = Color(red: 0.22, green: 0.44, blue: 0.47)
+    let orangeColor = Color(red: 1.0, green: 0.27, blue: 0.0)
+    let lightGreenHill = Color(red: 0.82, green: 0.93, blue: 0.86) // Warna bukit hijau pastel
+    
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: Spacing.xxxl)
-
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                Text(title)
-                    .font(.headlineSmall)
-                    .foregroundStyle(Color.terracotta)
-                Text(subtitle)
-                    .font(.bodyMedium)
-                    .foregroundStyle(.secondary)
+        GeometryReader { geo in
+            ZStack {
+                Color.white.ignoresSafeArea()
+                
+                // MARK: - Green Hill Background (Khusus Halaman 4 / Welcome)
+                if step == 3 {
+                    VStack {
+                        Spacer()
+                        Ellipse()
+                            .fill(lightGreenHill)
+                            .frame(width: geo.size.width * 1.5, height: geo.size.height * 0.5)
+                            .offset(y: geo.size.height * 0.15)
+                    }
+                    .frame(width: geo.size.width)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                }
+                
+                VStack(spacing: 0) {
+                    // MARK: - Top Navigation (Back Button)
+                    HStack {
+                        Button(action: {
+                            if step > 0 { step -= 1 }
+                        }) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundStyle(.black)
+                                .padding(16)
+                                .background(Color.white)
+                                .clipShape(Circle())
+                                .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
+                        }
+                        .opacity(step > 0 ? 1 : 0) // Sembunyikan di halaman pertama
+                        
+                        Spacer()
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 10)
+                    
+                    if step < 3 {
+                        // MARK: - Title (Halaman 1 - 3)
+                        Text(title)
+                            .font(.system(size: 50, weight: .black, design: .default))
+                            .multilineTextAlignment(.center)
+                            .foregroundColor(.black)
+                            .lineSpacing(-5)
+                            .padding(.top, 20)
+                        
+                        Spacer()
+                        
+                        // MARK: - Illustration
+                        illustration
+                            .frame(height: 320)
+                            .frame(maxWidth: .infinity)
+                        
+                        Spacer()
+                    } else {
+                        // MARK: - Welcome Content (Halaman 4)
+                        Spacer()
+                        
+                        VStack(spacing: 16) {
+                            Text("Welcome")
+                                .font(.system(size: 36, weight: .heavy, design: .default))
+                                .foregroundColor(.black)
+                            
+                            Text("Your profile is set up, your sensors are online, and your radar is ready to scan. Let's find some events happening near you based on your interest.")
+                                .font(.system(size: 16, weight: .regular))
+                                .foregroundColor(Color(white: 0.35))
+                                .multilineTextAlignment(.center)
+                                .lineSpacing(4)
+                                .padding(.horizontal, 8)
+                        }
+                        .padding(.horizontal, 28)
+                        
+                        Spacer()
+                    }
+                    
+                    // MARK: - Actions
+                    actions
+                        .padding(.horizontal, 28)
+                        .padding(.bottom, 40)
+                }
+                // Kunci juga lebar konten utamanya
+                .frame(width: geo.size.width)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, Spacing.lg)
-
-            Spacer()
-
-            illustration
-                .frame(height: 260)
-                .frame(maxWidth: .infinity)
-
-            Spacer()
-
-            actions
-                .padding(.horizontal, Spacing.lg)
-                .padding(.bottom, Spacing.xl)
+            // Pastikan ZStack keseluruhan tidak melebihi lebar layar
+            .frame(width: geo.size.width)
+            .animation(.easeInOut(duration: 0.3), value: step)
         }
-        .background(Color.peach.opacity(0.35).ignoresSafeArea())
-        .animation(.easeInOut(duration: 0.2), value: step)
     }
-
-    // MARK: - Step content
-
+    
+    // MARK: - Step Content
+    
     private var title: String {
         switch step {
-        case 0: return "Enable GPS"
-        case 1: return "Enable Bluetooth"
-        default: return "Stay Notified"
+        case 0: return "Enable\nLocation\nAccess"
+        case 1: return "Enable\nBluetooth\nAccess"
+        default: return "Stay\nNotified"
         }
     }
-
-    private var subtitle: String {
-        switch step {
-        case 0: return "We map your local surroundings to find active events near you. To keep your radar scanning seamlessly — we need your location set to Always Allow."
-        case 1: return "Your phone talks to nearby devices using Bluetooth and Ultra-Wideband signals. This enables your device to measure the exact distance of people right in front of you."
-        default: return "When someone nearby drops a ping to connect with you, your phone will vibrate, play a custom sound, and notify you instantly. Turn on notifications so you never miss an opportunity to meet."
-        }
-    }
-
+    
     @ViewBuilder
     private var illustration: some View {
-        ZStack {
-            Circle()
-                .fill(Color.apricot.opacity(0.35))
-                .frame(width: 200, height: 200)
-            Image(systemName: symbolName)
-                .font(.system(size: 84, weight: .light))
-                .foregroundStyle(Color.coral)
+        GeometryReader { geo in
+            ZStack {
+                switch step {
+                case 0:
+                    // Location Illustration
+                    LocationRibbonShape()
+                        .fill(orangeColor)
+                    
+                    // Small Orange Pin
+                    MapPinView(color: orangeColor)
+                        .frame(width: 30, height: 45)
+                        .rotationEffect(.degrees(15))
+                        .position(x: geo.size.width * 0.82, y: geo.size.height * 0.35)
+                    
+                    // Big Teal Pin
+                    MapPinView(color: tealButton)
+                        .frame(width: 80, height: 120)
+                        .rotationEffect(.degrees(15))
+                        .position(x: geo.size.width * 0.55, y: geo.size.height * 0.7)
+                    
+                case 1:
+                    // Bluetooth Illustration
+                    BluetoothWaveShape()
+                        .stroke(
+                            LinearGradient(
+                                colors: [Color(red: 1.0, green: 0.2, blue: 0.0), Color(red: 1.0, green: 0.6, blue: 0.3)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ),
+                            style: StrokeStyle(lineWidth: 18, lineCap: .round)
+                        )
+                        .padding(.horizontal, -20)
+                    
+                default:
+                    // Notifications Illustration
+                    ZStack {
+                        Circle().fill(Color(red: 1.0, green: 0.9, blue: 0.8)).frame(width: 200)
+                        Image(systemName: "bell.badge.fill")
+                            .font(.system(size: 84))
+                            .foregroundStyle(orangeColor)
+                    }
+                    .position(x: geo.size.width / 2, y: geo.size.height / 2)
+                }
+            }
         }
     }
-
-    private var symbolName: String {
-        switch step {
-        case 0: return "location.circle.fill"
-        case 1: return "dot.radiowaves.left.and.right"
-        default: return "bell.badge.fill"
-        }
-    }
-
+    
     // MARK: - Actions
-
+    
     @ViewBuilder
     private var actions: some View {
-        switch step {
-        case 0:
-            Button("Allow Location Access") {
-                Task {
-                    await LocationService.shared.requestPermissionAndStart()
-                    advance()
+        VStack(spacing: 16) {
+            switch step {
+            case 0:
+                Button(action: {
+                    Task {
+                        await LocationService.shared.requestPermissionAndStart()
+                        advance()
+                    }
+                }) {
+                    Text("Allow Location")
+                        .primaryButtonStyle(bg: tealButton)
                 }
-            }
-            .buttonStyle(PrimaryButtonStyle())
-
-        case 1:
-            Button("Allow Bluetooth Access") {
-                BluetoothPermissionPrimer.shared.request()
-                advance()
-            }
-            .buttonStyle(PrimaryButtonStyle())
-
-        default:
-            HStack(spacing: Spacing.md) {
-                Button("Skip") { finish() }
-                    .buttonStyle(SecondaryButtonStyle())
-                Button("Enable") {
+                
+            case 1:
+                Button(action: {
+                    BluetoothPermissionPrimer.shared.request()
+                    advance()
+                }) {
+                    Text("Allow Bluetooth")
+                        .primaryButtonStyle(bg: tealButton)
+                }
+                
+                Button(action: { advance() }) {
+                    Text("Maybe Later")
+                        .secondaryButtonStyle(color: tealButton)
+                }
+                
+            case 2:
+                // Panggil advance() di luar Task agar halaman langsung pindah secara instan
+                Button(action: {
+                    advance()
+                    
+                    // Request izin notifikasi berjalan di background
                     Task {
                         _ = await NotificationPermissionPrimer.request()
-                        finish()
                     }
+                }) {
+                    Text("Enable Notifications")
+                        .primaryButtonStyle(bg: tealButton)
                 }
-                .buttonStyle(PrimaryButtonStyle())
+                
+                Button(action: { advance() }) {
+                    Text("Maybe Later")
+                        .secondaryButtonStyle(color: tealButton)
+                }
+                
+            default:
+                // Halaman Welcome (Step 3) - Barulah panggil `finish()` untuk masuk ke app
+                Button(action: { finish() }) {
+                    Text("Let's Explore Map")
+                        .primaryButtonStyle(bg: tealButton)
+                }
             }
         }
     }
-
+    
+    // MARK: - Logic Helpers
     private func advance() {
         if step < stepCount - 1 {
             step += 1
@@ -121,8 +230,108 @@ struct PermissionsPrimingView: View {
             finish()
         }
     }
-
+    
     private func finish() {
         appState.hasSeenPermissionsPriming = true
     }
+}
+
+// MARK: - Custom Shapes & Modifiers
+
+struct LocationRibbonShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let w = rect.width
+        let h = rect.height
+        
+        p.move(to: CGPoint(x: 0, y: h * 0.55))
+        p.addCurve(to: CGPoint(x: w * 0.5, y: h * 0.45),
+                   control1: CGPoint(x: w * 0.25, y: h * 0.5),
+                   control2: CGPoint(x: w * 0.35, y: h * 0.45))
+        p.addCurve(to: CGPoint(x: w * 0.8, y: h * 0.35),
+                   control1: CGPoint(x: w * 0.65, y: h * 0.45),
+                   control2: CGPoint(x: w * 0.7, y: h * 0.35))
+        
+        p.addLine(to: CGPoint(x: w * 0.82, y: h * 0.35))
+        
+        p.addCurve(to: CGPoint(x: w * 0.4, y: h * 0.55),
+                   control1: CGPoint(x: w * 0.7, y: h * 0.45),
+                   control2: CGPoint(x: w * 0.6, y: h * 0.5))
+        p.addCurve(to: CGPoint(x: 0, y: h * 0.85),
+                   control1: CGPoint(x: w * 0.2, y: h * 0.6),
+                   control2: CGPoint(x: w * 0.1, y: h * 0.75))
+        
+        p.closeSubpath()
+        return p
+    }
+}
+
+struct MapPinView: View {
+    var color: Color
+    
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+            Path { p in
+                p.move(to: CGPoint(x: w/2, y: h))
+                p.addCurve(to: CGPoint(x: 0, y: h*0.3), control1: CGPoint(x: w*0.3, y: h*0.7), control2: CGPoint(x: 0, y: h*0.5))
+                p.addArc(center: CGPoint(x: w/2, y: h*0.3), radius: w/2, startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false)
+                p.addCurve(to: CGPoint(x: w/2, y: h), control1: CGPoint(x: w, y: h*0.5), control2: CGPoint(x: w*0.7, y: h*0.7))
+            }
+            .fill(color)
+            .overlay(
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: w * 0.4)
+                    .position(x: w/2, y: h*0.3)
+            )
+        }
+    }
+}
+
+struct BluetoothWaveShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let w = rect.width
+        let h = rect.height
+        
+        p.move(to: CGPoint(x: 0, y: h * 0.55))
+        p.addCurve(to: CGPoint(x: w, y: h * 0.45),
+                   control1: CGPoint(x: w * 0.35, y: h * 0.1),
+                   control2: CGPoint(x: w * 0.65, y: h * 0.9))
+        return p
+    }
+}
+
+// Modifier pembantu untuk styling button yang seragam
+extension View {
+    func primaryButtonStyle(bg: Color) -> some View {
+        self.font(.system(size: 18, weight: .bold))
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 20)
+            .background(bg)
+            .clipShape(Capsule())
+            .background(
+                Capsule().fill(Color.black).offset(x: 0, y: 5)
+            )
+    }
+    
+    func secondaryButtonStyle(color: Color) -> some View {
+        self.font(.system(size: 18, weight: .bold))
+            .foregroundColor(color)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 20)
+            .background(Color.white)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule().stroke(color, lineWidth: 1)
+            )
+    }
+}
+
+#Preview {
+    PermissionsPrimingView()
+        .environment(AppState())
 }
