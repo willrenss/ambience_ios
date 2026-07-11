@@ -37,7 +37,7 @@ fastlane/test_output
 # and fills in their own DEVELOPMENT_TEAM + PRODUCT_BUNDLE_IDENTIFIER.
 Config/Signing.xcconfig
 
-# --- VS Code / SweetPad workspace (per-developer, never commit) ---
+# --- VSC/SweetPad workspace ---
 .vscode/
 buildServer.json
 

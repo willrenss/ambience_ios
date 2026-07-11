@@ -45,6 +45,11 @@ final class AppState: @unchecked Sendable {
     // strand the user on the map instead of back in radar.
     var isRadarPresented: Bool = false
 
+    // Whether EventMapView's in-place search overlay is up. Lives here (not local
+    // @State) for the same reason as isRadarPresented — MainTabView needs to see it
+    // to hide the floating tab bar while search is showing.
+    var isSearchPresented: Bool = false
+
     // Set by StatusIntentView — HomeView observes and auto-connects to radar.
     var shouldAutoConnectRadar: Bool = false
 
