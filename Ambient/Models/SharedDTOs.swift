@@ -389,6 +389,15 @@ extension Interest: Codable {
 }
 
 // MARK: - Events
+
+// A single avatar-stack entry — a real photo when the user has one, with
+// `initial` as the fallback letter, matching the photo-or-initials pattern
+// used everywhere else in the app.
+struct EventAttendeePreviewDTO: Sendable, Equatable, Codable {
+    let photoURL: String?
+    let initial: String
+}
+
 struct EventDTO: Sendable, Identifiable, Equatable {
     let id: UUID
     let name: String
@@ -407,13 +416,22 @@ struct EventDTO: Sendable, Identifiable, Equatable {
     let locationName: String?
     let attendeeInitials: [String]
     let attendeeCount: Int
+    // Who's currently online (radar-active) at this event — checked-in card.
+    var onlineAttendees: [EventAttendeePreviewDTO] = []
+    var onlineCount: Int = 0
+    // Who's bookmarked this event — preview (not-checked-in) card. `var` so the
+    // heart button can update these optimistically without a round-trip.
+    var bookmarkAttendees: [EventAttendeePreviewDTO] = []
+    var bookmarkCount: Int = 0
+    var isBookmarked: Bool = false
 }
 
 extension EventDTO: Codable {
     private enum CodingKeys: String, CodingKey {
         case id, name, source, organizer, longitude, latitude, deskripsi, linkMaps, linkRegistrasi,
              hargaTiket, startAt, endAt, imageURL, category, locationName,
-             attendeeInitials, attendeeCount
+             attendeeInitials, attendeeCount,
+             onlineAttendees, onlineCount, bookmarkAttendees, bookmarkCount, isBookmarked
     }
     nonisolated init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -434,6 +452,11 @@ extension EventDTO: Codable {
         locationName     = try c.decodeIfPresent(String.self, forKey: .locationName)
         attendeeInitials = try c.decodeIfPresent([String].self, forKey: .attendeeInitials) ?? []
         attendeeCount    = try c.decodeIfPresent(Int.self, forKey: .attendeeCount) ?? 0
+        onlineAttendees  = try c.decodeIfPresent([EventAttendeePreviewDTO].self, forKey: .onlineAttendees) ?? []
+        onlineCount      = try c.decodeIfPresent(Int.self, forKey: .onlineCount) ?? 0
+        bookmarkAttendees = try c.decodeIfPresent([EventAttendeePreviewDTO].self, forKey: .bookmarkAttendees) ?? []
+        bookmarkCount    = try c.decodeIfPresent(Int.self, forKey: .bookmarkCount) ?? 0
+        isBookmarked     = try c.decodeIfPresent(Bool.self, forKey: .isBookmarked) ?? false
     }
     nonisolated func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -454,6 +477,11 @@ extension EventDTO: Codable {
         try c.encodeIfPresent(locationName,   forKey: .locationName)
         try c.encode(attendeeInitials, forKey: .attendeeInitials)
         try c.encode(attendeeCount,    forKey: .attendeeCount)
+        try c.encode(onlineAttendees,  forKey: .onlineAttendees)
+        try c.encode(onlineCount,      forKey: .onlineCount)
+        try c.encode(bookmarkAttendees, forKey: .bookmarkAttendees)
+        try c.encode(bookmarkCount,    forKey: .bookmarkCount)
+        try c.encode(isBookmarked,     forKey: .isBookmarked)
     }
 }
 
@@ -575,6 +603,7 @@ struct PingNotificationDTO: Sendable, Identifiable {
     let fromUserID: UUID
     let fromNickname: String
     let fromAge: Int
+    let fromPhotoURL: String?
     let eventID: UUID
     let createdAt: Date
 
@@ -582,12 +611,13 @@ struct PingNotificationDTO: Sendable, Identifiable {
 }
 
 extension PingNotificationDTO: Codable {
-    private enum CodingKeys: CodingKey { case fromUserID, fromNickname, fromAge, eventID, createdAt }
+    private enum CodingKeys: CodingKey { case fromUserID, fromNickname, fromAge, fromPhotoURL, eventID, createdAt }
     nonisolated init(from decoder: any Decoder) throws {
         let c        = try decoder.container(keyedBy: CodingKeys.self)
         fromUserID   = try c.decode(UUID.self,   forKey: .fromUserID)
         fromNickname = try c.decode(String.self, forKey: .fromNickname)
         fromAge      = try c.decode(Int.self,    forKey: .fromAge)
+        fromPhotoURL = try c.decodeIfPresent(String.self, forKey: .fromPhotoURL)
         eventID      = try c.decode(UUID.self,   forKey: .eventID)
         createdAt    = try c.decode(Date.self,   forKey: .createdAt)
     }
@@ -596,6 +626,7 @@ extension PingNotificationDTO: Codable {
         try c.encode(fromUserID,   forKey: .fromUserID)
         try c.encode(fromNickname, forKey: .fromNickname)
         try c.encode(fromAge,      forKey: .fromAge)
+        try c.encodeIfPresent(fromPhotoURL, forKey: .fromPhotoURL)
         try c.encode(eventID,      forKey: .eventID)
         try c.encode(createdAt,    forKey: .createdAt)
     }
@@ -607,15 +638,23 @@ struct RoomDTO: Sendable, Identifiable {
     let peerUserID: UUID
     let peerNickname: String
     let peerAge: Int
+    let peerPhotoURL: String?
     let eventID: UUID?
     let eventName: String?
     let createdAt: Date?
+    let updatedAt: Date?
+    /// Who sent the most recent chat message (nil if no messages yet) — lets the
+    /// client tell "peer sent a new message" apart from "I sent the last one".
+    let lastMessageSenderID: UUID?
+    /// Preview text of the most recent chat message (nil if no messages yet).
+    let lastMessageText: String?
+    /// true = current user was the first pinger (userA) → UWB guest/initiator
     let isInitiator: Bool
 }
 
 extension RoomDTO: Codable {
     private enum CodingKeys: CodingKey {
-        case id, codeRoom, peerUserID, peerNickname, peerAge, eventID, eventName, createdAt, isInitiator
+        case id, codeRoom, peerUserID, peerNickname, peerAge, peerPhotoURL, eventID, eventName, createdAt, updatedAt, lastMessageSenderID, lastMessageText, isInitiator
     }
     nonisolated init(from decoder: any Decoder) throws {
         let c        = try decoder.container(keyedBy: CodingKeys.self)
@@ -624,9 +663,13 @@ extension RoomDTO: Codable {
         peerUserID   = try c.decode(UUID.self,   forKey: .peerUserID)
         peerNickname = try c.decode(String.self, forKey: .peerNickname)
         peerAge      = try c.decode(Int.self,    forKey: .peerAge)
+        peerPhotoURL = try c.decodeIfPresent(String.self, forKey: .peerPhotoURL)
         eventID      = try c.decodeIfPresent(UUID.self,   forKey: .eventID)
         eventName    = try c.decodeIfPresent(String.self, forKey: .eventName)
         createdAt    = try c.decodeIfPresent(Date.self,   forKey: .createdAt)
+        updatedAt    = try c.decodeIfPresent(Date.self,   forKey: .updatedAt)
+        lastMessageSenderID = try c.decodeIfPresent(UUID.self, forKey: .lastMessageSenderID)
+        lastMessageText = try c.decodeIfPresent(String.self, forKey: .lastMessageText)
         isInitiator  = try c.decodeIfPresent(Bool.self,   forKey: .isInitiator) ?? false
     }
     nonisolated func encode(to encoder: any Encoder) throws {
@@ -636,9 +679,13 @@ extension RoomDTO: Codable {
         try c.encode(peerUserID,   forKey: .peerUserID)
         try c.encode(peerNickname, forKey: .peerNickname)
         try c.encode(peerAge,      forKey: .peerAge)
+        try c.encodeIfPresent(peerPhotoURL, forKey: .peerPhotoURL)
         try c.encodeIfPresent(eventID,   forKey: .eventID)
         try c.encodeIfPresent(eventName, forKey: .eventName)
         try c.encodeIfPresent(createdAt, forKey: .createdAt)
+        try c.encodeIfPresent(updatedAt, forKey: .updatedAt)
+        try c.encodeIfPresent(lastMessageSenderID, forKey: .lastMessageSenderID)
+        try c.encodeIfPresent(lastMessageText, forKey: .lastMessageText)
         try c.encode(isInitiator, forKey: .isInitiator)
     }
 }

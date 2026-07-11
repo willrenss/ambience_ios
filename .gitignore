@@ -37,6 +37,10 @@ fastlane/test_output
 # and fills in their own DEVELOPMENT_TEAM + PRODUCT_BUNDLE_IDENTIFIER.
 Config/Signing.xcconfig
 
+# --- VSC/SweetPad workspace ---
+.vscode/
+buildServer.json
+
 # macOS
 .DS_Store
 .AppleDouble

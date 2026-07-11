@@ -4,6 +4,7 @@ struct RoomView: View {
     let roomID: UUID
     @State private var viewModel = RoomViewModel()
     @Environment(NavigationRouter.self) private var router
+    @Environment(AppState.self) private var appState
     @Environment(\.openURL) private var openURL
     @FocusState private var isComposerFocused: Bool
 
@@ -30,7 +31,19 @@ struct RoomView: View {
         .task(id: roomID) {
             await viewModel.load(id: roomID)
         }
+        .onAppear {
+            // Optimistically clear the badge on entry; the message-timestamp watchers
+            // below then pin the watermark to the newest message (server clock) so it
+            // survives clock skew and covers messages that arrive while we're reading.
+            appState.markRoomSeen(roomID: roomID, upTo: Date())
+        }
+        .onChange(of: viewModel.messages.last?.timestamp) { _, latest in
+            if let latest { appState.markRoomSeen(roomID: roomID, upTo: latest) }
+        }
         .onDisappear {
+            if let latest = viewModel.messages.last?.timestamp {
+                appState.markRoomSeen(roomID: roomID, upTo: latest)
+            }
             viewModel.cleanup()
         }
     }
@@ -49,14 +62,17 @@ struct RoomView: View {
             Spacer()
 
             VStack(spacing: 4) {
-                Circle()
-                    .fill(Color.coral.opacity(0.25))
-                    .frame(width: 52, height: 52)
-                    .overlay {
-                        Text(String(viewModel.room?.peerNickname.prefix(1) ?? "?").uppercased())
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(Color.terracotta)
+                if let urlStr = viewModel.room?.peerPhotoURL, let url = URL(string: urlStr) {
+                    AsyncImage(url: url) { img in
+                        img.resizable().scaledToFill()
+                    } placeholder: {
+                        chatAvatarPlaceholder
                     }
+                    .frame(width: 52, height: 52)
+                    .clipShape(Circle())
+                } else {
+                    chatAvatarPlaceholder
+                }
                 Text(viewModel.room?.peerNickname ?? "")
                     .font(.system(size: 13))
                     .foregroundStyle(.primary)
@@ -69,6 +85,17 @@ struct RoomView: View {
         .padding(.horizontal, 12)
         .padding(.top, 4)
         .padding(.bottom, 8)
+    }
+
+    private var chatAvatarPlaceholder: some View {
+        Circle()
+            .fill(Color.coral.opacity(0.25))
+            .frame(width: 52, height: 52)
+            .overlay {
+                Text(String(viewModel.room?.peerNickname.prefix(1) ?? "?").uppercased())
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(Color.terracotta)
+            }
     }
 
     // MARK: - Message list

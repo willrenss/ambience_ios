@@ -7,15 +7,28 @@ final class MatchesViewModel {
     var isLoading = false
     var errorMessage: String? = nil
 
-    func load() async {
+    func load(appState: AppState) async {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
         do {
-            rooms = try await MatchService.shared.fetchMatches()
+            let fetched = try await MatchService.shared.fetchMatches()
+            rooms = fetched
+            appState.recomputeUnread(from: fetched, ownUserID: appState.currentUser?.id)
         } catch {
             errorMessage = "Failed to load matches."
         }
+    }
+
+    // Silent background refresh while the list is on screen — no spinner, no error
+    // surfaced, so a transient poll failure doesn't interrupt the user. Without this,
+    // the preview/highlight only updated when the list was closed and reopened.
+    // Unread is derived from the fetched list + AppState's durable seen-watermark, so
+    // this needs no in-memory baseline (which is what made detection fragile before).
+    func refreshQuietly(appState: AppState, ownUserID: UUID?) async {
+        guard let updated = try? await MatchService.shared.fetchMatches() else { return }
+        rooms = updated
+        appState.recomputeUnread(from: updated, ownUserID: ownUserID)
     }
 }
 
@@ -58,7 +71,7 @@ struct MatchesView: View {
                         Button {
                             router.push(room.id)
                         } label: {
-                            MatchRow(room: room)
+                            MatchRow(room: room, isUnseen: appState.isUnread(room, ownUserID: appState.currentUser?.id))
                         }
                         .buttonStyle(.plain)
                     }
@@ -85,8 +98,18 @@ struct MatchesView: View {
         .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
             Button("OK") { viewModel.errorMessage = nil }
         } message: { Text(viewModel.errorMessage ?? "") }
-        .task { await viewModel.load() }
-        .refreshable { await viewModel.load() }
+        .task {
+            await viewModel.load(appState: appState)
+            // Poll while the list is visible so previews/highlights update live —
+            // .task auto-cancels this loop when the view disappears.
+            let ownUserID = appState.currentUser?.id
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(5))
+                guard !Task.isCancelled else { break }
+                await viewModel.refreshQuietly(appState: appState, ownUserID: ownUserID)
+            }
+        }
+        .refreshable { await viewModel.load(appState: appState) }
     }
 }
 
@@ -94,20 +117,33 @@ struct MatchesView: View {
 
 private struct MatchRow: View {
     let room: RoomDTO
+    let isUnseen: Bool
 
     private let avatarSize: CGFloat = 52
 
     var body: some View {
         HStack(spacing: Spacing.md) {
             // Avatar
-            ZStack {
-                Circle()
-                    .fill(Color(.systemGray4))
+            ZStack(alignment: .topTrailing) {
+                if let urlStr = room.peerPhotoURL, let url = URL(string: urlStr) {
+                    AsyncImage(url: url) { img in
+                        img.resizable().scaledToFill()
+                    } placeholder: {
+                        avatarPlaceholder
+                    }
                     .frame(width: avatarSize, height: avatarSize)
-                Text(String(room.peerNickname.prefix(1)).uppercased())
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .clipShape(Circle())
+                } else {
+                    avatarPlaceholder
+                }
+                if isUnseen {
+                    Circle()
+                        .fill(Color.coral)
+                        .frame(width: 14, height: 14)
+                        .overlay(Circle().stroke(.white, lineWidth: 2))
+                }
             }
+            .frame(width: avatarSize, height: avatarSize)
 
             // Name + preview
             VStack(alignment: .leading, spacing: 3) {
@@ -116,9 +152,9 @@ private struct MatchRow: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
-                Text(room.eventName ?? "Tap to start chatting")
-                    .font(.system(size: 14))
-                    .foregroundStyle(.secondary)
+                Text(room.lastMessageText ?? room.eventName ?? "Tap to start chatting")
+                    .font(.system(size: 14, weight: isUnseen ? .semibold : .regular))
+                    .foregroundStyle(isUnseen ? Color.terracotta : .secondary)
                     .lineLimit(1)
             }
 
@@ -126,6 +162,18 @@ private struct MatchRow: View {
         }
         .padding(.horizontal, Spacing.lg)
         .padding(.vertical, 12)
+        .background(isUnseen ? Color.peach.opacity(0.3) : .clear)
         .contentShape(Rectangle())
+    }
+
+    private var avatarPlaceholder: some View {
+        ZStack {
+            Circle()
+                .fill(Color(.systemGray4))
+                .frame(width: avatarSize, height: avatarSize)
+            Text(String(room.peerNickname.prefix(1)).uppercased())
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(.white)
+        }
     }
 }

@@ -51,6 +51,14 @@ actor EventService {
     func fetchRadar(eventID: UUID) async throws -> [EventRadarUserDTO] {
         try await APIClient.shared.get("/events/\(eventID.uuidString)/radar")
     }
+
+    func bookmark(eventID: UUID) async throws {
+        try await APIClient.shared.post("/events/\(eventID.uuidString)/bookmark", body: EmptyBody())
+    }
+
+    func unbookmark(eventID: UUID) async throws {
+        try await APIClient.shared.delete("/events/\(eventID.uuidString)/bookmark")
+    }
 }
 
 struct EmptyBody: Sendable {}

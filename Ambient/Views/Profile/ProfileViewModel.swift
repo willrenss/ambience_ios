@@ -48,6 +48,20 @@ final class ProfileViewModel {
         appState.currentUser?.hometown = value
     }
 
+    func uploadPhoto(_ imageData: Data) async {
+        do {
+            let updated: UserProfile = try await APIClient.shared.uploadFile(
+                "/me/photo", fieldName: "photo", filename: "profile.jpg",
+                mimeType: "image/jpeg", data: imageData
+            )
+            user = updated
+            appState.currentUser = updated
+        } catch {
+            // Non-fatal — the picker UI just won't show a new image; existing photo
+            // (or the initials placeholder) stays in place.
+        }
+    }
+
     func signOut() async {
         isLoading = true
         defer { isLoading = false }

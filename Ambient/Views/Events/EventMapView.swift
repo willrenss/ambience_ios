@@ -7,10 +7,7 @@ private struct MapSheetEvent: Identifiable { let id: UUID }
 
 struct EventMapView: View {
     @State private var viewModel = EventsViewModel()
-    @State private var isSearchActive = false
     @State private var sheetEvent: MapSheetEvent?
-    @State private var isFavorited = false
-    @State private var isRadarPresented = false
     @State private var previewEvent: EventDTO?   // event currently shown in overlay
     @State private var cameraPosition: MapCameraPosition = .region(
         MKCoordinateRegion(
@@ -19,12 +16,14 @@ struct EventMapView: View {
         )
     )
     @Environment(AppState.self) private var appState
-    
+
     private let teal = Color(hex: 0x1E7082)
     
     var body: some View {
         @Bindable var viewModel = viewModel
-        
+        @Bindable var appState = appState
+        let isPreviewShowing = (previewEvent ?? appState.activeEvent) != nil
+
         ZStack {
             // Full-screen map
             Map(position: $cameraPosition) {
@@ -40,7 +39,9 @@ struct EventMapView: View {
                         )
                         .onTapGesture {
                             if appState.activeEvent?.id == event.id {
-                                isRadarPresented = true
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    appState.isRadarPresented = true
+                                }
                             } else {
                                 previewEvent = event
                             }
@@ -55,7 +56,11 @@ struct EventMapView: View {
             
             VStack(spacing: 0) {
                 // ── Search bar ─────────────────────────────────────────────
-                Button { isSearchActive = true } label: {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.32)) {
+                        appState.isSearchPresented = true
+                    }
+                } label: {
                     HStack(spacing: Spacing.sm) {
                         Image(systemName: "magnifyingglass")
                             .foregroundStyle(.secondary)
@@ -73,9 +78,10 @@ struct EventMapView: View {
                     .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
                 }
                 .buttonStyle(.plain)
+                .opacity(appState.isSearchPresented ? 0 : 1)
                 .padding(.horizontal, Spacing.lg)
                 .padding(.top, Spacing.sm)
-                
+
                 // ── Category chips ──────────────────────────────────────────
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: Spacing.sm) {
@@ -102,17 +108,24 @@ struct EventMapView: View {
                 .padding(.top, Spacing.sm)
                 
                 Spacer()
-                
+
                 // ── Location button ────────────────────────────────────────
+                // 100 clears the floating tab bar; add card height + gap when a preview/checked-in card is showing.
                 HStack {
                     Spacer()
                     Button {
-                        cameraPosition = .region(
-                            MKCoordinateRegion(
-                                center: CLLocationCoordinate2D(latitude: -6.2088, longitude: 106.8456),
-                                span: MKCoordinateSpan(latitudeDelta: 0.06, longitudeDelta: 0.06)
-                            )
-                        )
+                        Task {
+                            // Live GPS fix, not a hardcoded coordinate — silent no-op if unavailable.
+                            guard let location = await LocationService.shared.awaitLocation() else { return }
+                            withAnimation(.easeInOut(duration: 0.6)) {
+                                cameraPosition = .region(
+                                    MKCoordinateRegion(
+                                        center: location.coordinate,
+                                        span: MKCoordinateSpan(latitudeDelta: 0.06, longitudeDelta: 0.06)
+                                    )
+                                )
+                            }
+                        }
                     } label: {
                         Image(systemName: "location.north.fill")
                             .font(.system(size: 18, weight: .semibold))
@@ -123,7 +136,8 @@ struct EventMapView: View {
                     }
                 }
                 .padding(.trailing, Spacing.lg)
-                .padding(.bottom, Spacing.lg)
+                .padding(.bottom, isPreviewShowing ? 260 : 100)
+                .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isPreviewShowing)
             }
             
             // Overlay card — shows preview (pin tap) or checked-in state
@@ -138,36 +152,58 @@ struct EventMapView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .animation(.spring(response: 0.35, dampingFraction: 0.85), value: displayed.id)
             }
+
+            // In-place fade, not fullScreenCover's slide-up — pure opacity avoids the edge gap scale+fade left.
+            if appState.isSearchPresented {
+                NavigationStack {
+                    EventsView(viewModel: viewModel, onDismiss: {
+                        withAnimation(.easeInOut(duration: 0.28)) {
+                            appState.isSearchPresented = false
+                        }
+                    })
+                }
+                .environment(appState)
+                .transition(.opacity)
+            }
+
+            // Radar — same in-place ease/fade treatment as search, instead of
+            // fullScreenCover's fixed slide-up-from-bottom transition.
+            if appState.isRadarPresented {
+                RadarHost(onDismiss: {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        appState.isRadarPresented = false
+                    }
+                })
+                .transition(.opacity)
+            }
         }
         .toolbar(.hidden, for: .navigationBar)
         .fullScreenCover(item: $sheetEvent, onDismiss: {
             // EventDetailView fully dismissed — now safe to open radar if user checked in.
             if appState.activeEvent != nil {
                 appState.shouldAutoConnectRadar = true
-                isRadarPresented = true
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    appState.isRadarPresented = true
+                }
             }
         }) { e in
             EventDetailView(eventID: e.id)
         }
-        .fullScreenCover(isPresented: $isSearchActive) {
-            // 1. TAMBAHKAN NavigationStack di sini
-            NavigationStack {
-                EventsView(viewModel: viewModel)
-            }
-            // 2. Lempar environment appState agar EventDetailView bisa mengaksesnya
-            .environment(appState)
-        }
-        .fullScreenCover(isPresented: $isRadarPresented) {
-            HomeView()
-        }
         .onChange(of: appState.activeEvent) { _, event in
             if event == nil {
-                isRadarPresented = false
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    appState.isRadarPresented = false
+                }
                 previewEvent = nil
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .eventBookmarkChanged)) { note in
+            guard let updated = note.object as? EventDTO else { return }
+            if previewEvent?.id == updated.id { previewEvent = updated }
+            if appState.activeEvent?.id == updated.id { appState.activeEvent = updated }
+            viewModel.applyBookmarkUpdate(updated)
+        }
         .task { await viewModel.load() }
-        .refreshable { await viewModel.load() }
     }
     
     // MARK: - Overlay card (unified: preview + checked-in)
@@ -176,7 +212,9 @@ struct EventMapView: View {
         // Card — tap opens radar (if checked in) or detail (if preview)
         Button {
             if isCheckedIn {
-                isRadarPresented = true
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    appState.isRadarPresented = true
+                }
             } else {
                 sheetEvent = MapSheetEvent(id: event.id)
             }
@@ -232,18 +270,17 @@ struct EventMapView: View {
                             SearchPriceBadge(event: event)
                         }
                         Spacer(minLength: 0)
-                        // Mini avatar stack
+                        // Mini avatar stack — checked-in shows who's online right
+                        // now (live radar); preview shows who's bookmarked it.
                         HStack(spacing: -10) {
-                            ForEach(Array(event.attendeeInitials.prefix(3).enumerated()), id: \.offset) { _, ini in
-                                Circle()
-                                    .fill(Color(.systemGray3))
-                                    .frame(width: 28, height: 28)
-                                    .overlay(Text(ini).font(.system(size: 9, weight: .bold)).foregroundStyle(.white))
-                                    .overlay(Circle().stroke(.white, lineWidth: 2))
+                            let previews = isCheckedIn ? event.onlineAttendees : event.bookmarkAttendees
+                            let total = isCheckedIn ? event.onlineCount : event.bookmarkCount
+                            ForEach(Array(previews.prefix(3).enumerated()), id: \.offset) { _, preview in
+                                avatarStackEntry(preview)
                             }
-                            let shown = min(event.attendeeInitials.count, 3)
-                            if event.attendeeCount > shown {
-                                Text("+\(event.attendeeCount - shown)")
+                            let shown = min(previews.count, 3)
+                            if total > shown {
+                                Text("+\(total - shown)")
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundStyle(.white)
                                     .frame(width: 28, height: 28)
@@ -262,8 +299,8 @@ struct EventMapView: View {
             // Heart button pinned to top-left corner of the card
             .overlay(alignment: .topLeading) {
                 if !isCheckedIn {
-                    Button { isFavorited.toggle() } label: {
-                        Image(systemName: isFavorited ? "heart.fill" : "heart")
+                    Button { toggleBookmark(event) } label: {
+                        Image(systemName: event.isBookmarked ? "heart.fill" : "heart")
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(Color.coral)
                             .frame(width: 44, height: 44)
@@ -275,6 +312,82 @@ struct EventMapView: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func avatarStackEntry(_ preview: EventAttendeePreviewDTO) -> some View {
+        Group {
+            if let urlStr = preview.photoURL, let url = URL(string: urlStr) {
+                AsyncImage(url: url) { img in
+                    img.resizable().scaledToFill()
+                } placeholder: {
+                    avatarStackPlaceholder(preview.initial)
+                }
+            } else {
+                avatarStackPlaceholder(preview.initial)
+            }
+        }
+        .frame(width: 28, height: 28)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(.white, lineWidth: 2))
+    }
+
+    private func avatarStackPlaceholder(_ initial: String) -> some View {
+        Circle()
+            .fill(Color(.systemGray3))
+            .overlay(Text(initial).font(.system(size: 9, weight: .bold)).foregroundStyle(.white))
+    }
+
+    // Optimistic flip on previewEvent, reverted on failure; also syncs viewModel.events and
+    // broadcasts .eventBookmarkChanged so EventDetailView/EventsView stay in sync.
+    private func toggleBookmark(_ event: EventDTO) {
+        guard var updated = previewEvent, updated.id == event.id else { return }
+        let wasBookmarked = updated.isBookmarked
+        updated.isBookmarked.toggle()
+        updated.bookmarkCount += updated.isBookmarked ? 1 : -1
+        previewEvent = updated
+        viewModel.applyBookmarkUpdate(updated)
+        NotificationCenter.default.post(name: .eventBookmarkChanged, object: updated)
+
+        Task {
+            do {
+                if updated.isBookmarked {
+                    try await EventService.shared.bookmark(eventID: event.id)
+                } else {
+                    try await EventService.shared.unbookmark(eventID: event.id)
+                }
+            } catch {
+                guard previewEvent?.id == event.id else { return }
+                var reverted = updated
+                reverted.isBookmarked = wasBookmarked
+                reverted.bookmarkCount += wasBookmarked ? 1 : -1
+                previewEvent = reverted
+                viewModel.applyBookmarkUpdate(reverted)
+                NotificationCenter.default.post(name: .eventBookmarkChanged, object: reverted)
+            }
+        }
+    }
+}
+
+// Carries the updated EventDTO; EventMapView stays mounted underneath both the search
+// overlay and EventDetailView's sheet, so it's the sync hub for all bookmark toggles.
+extension Notification.Name {
+    static let eventBookmarkChanged = Notification.Name("com.nowi.eventBookmarkChanged")
+}
+
+// MARK: - Radar Host
+
+// Isolated NavigationRouter/NavigationStack for radar, separate from mapsRouter —
+// prevents a push here from leaking a stray path value into the map's own stack.
+private struct RadarHost: View {
+    @State private var radarRouter = NavigationRouter()
+    var onDismiss: () -> Void
+
+    var body: some View {
+        NavigationStack(path: $radarRouter.path) {
+            HomeView(onDismiss: onDismiss)
+        }
+        .environment(radarRouter)
     }
 }
 

@@ -5,7 +5,9 @@ import SwiftUI
 final class EventsViewModel {
     var events: [EventDTO] = []
     var searchText: String = ""
-    var selectedCategory: String? = nil   // nil = "All" (heart chip)
+    var selectedCategory: String? = nil
+    // Heart chip — filters "Trending Events" to bookmarked only; mutually exclusive with selectedCategory.
+    var showBookmarkedOnly: Bool = false
     var isLoading: Bool = false
     var errorMessage: String? = nil
 
@@ -17,6 +19,7 @@ final class EventsViewModel {
     }
 
     var trending: [EventDTO] {
+        if showBookmarkedOnly { return events.filter { $0.isBookmarked } }
         guard let selectedCategory else { return events }
         return events.filter { $0.category == selectedCategory }
     }
@@ -43,10 +46,18 @@ final class EventsViewModel {
             errorMessage = "Failed to load events."
         }
     }
+
+    // Syncs a bookmark toggle from elsewhere (EventMapView/EventDetailView) — see .eventBookmarkChanged.
+    func applyBookmarkUpdate(_ updated: EventDTO) {
+        guard let idx = events.firstIndex(where: { $0.id == updated.id }) else { return }
+        events[idx] = updated
+    }
 }
 
 struct EventsView: View {
     @Bindable var viewModel: EventsViewModel
+    // Override for callers without a real presentation context (e.g. in-place overlay); falls back to dismiss.
+    var onDismiss: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @FocusState private var searchFocused: Bool
 
@@ -117,7 +128,7 @@ struct EventsView: View {
     
     private var searchBar: some View {
         HStack(spacing: 12) {
-            Button { dismiss() } label: {
+            Button { onDismiss?() ?? dismiss() } label: {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(.black)
@@ -161,24 +172,28 @@ struct EventsView: View {
     private var categoryChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
-                // Heart Icon (All)
+                // Heart Icon — bookmarked-only filter (toggle: tap again to clear it
+                // and go back to showing everything).
                 Button {
-                    viewModel.selectedCategory = nil
+                    viewModel.showBookmarkedOnly.toggle()
+                    if viewModel.showBookmarkedOnly { viewModel.selectedCategory = nil }
                 } label: {
-                    Image(systemName: viewModel.selectedCategory == nil ? "heart.fill" : "heart")
+                    Image(systemName: viewModel.showBookmarkedOnly ? "heart.fill" : "heart")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(viewModel.selectedCategory == nil ? .white : .primary)
+                        .foregroundStyle(viewModel.showBookmarkedOnly ? .white : .primary)
                         .frame(width: 38, height: 38)
-                        .background(viewModel.selectedCategory == nil ? Color.primary : .white, in: Circle())
+                        .background(viewModel.showBookmarkedOnly ? Color.primary : .white, in: Circle())
                         .overlay(
-                            Circle().stroke(Color(white: 0.9), lineWidth: viewModel.selectedCategory == nil ? 0 : 1)
+                            Circle().stroke(Color(white: 0.9), lineWidth: viewModel.showBookmarkedOnly ? 0 : 1)
                         )
                 }
 
-                // Categories
+                // Categories — tap again to clear (same toggle behavior as the heart
+                // chip, so there's always a way back to "no filter" from either axis).
                 ForEach(EventsViewModel.categories, id: \.self) { category in
                     Button {
-                        viewModel.selectedCategory = category
+                        viewModel.selectedCategory = viewModel.selectedCategory == category ? nil : category
+                        if viewModel.selectedCategory != nil { viewModel.showBookmarkedOnly = false }
                     } label: {
                         Text(category)
                             .font(.system(size: 14, weight: .medium))

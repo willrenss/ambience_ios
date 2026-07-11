@@ -24,13 +24,16 @@ final class HomeViewModel {
     // entry per sender (a repeat ping just bumps their card to the front).
     var receivedPings: [PingNotificationDTO] = []
 
+    // Matches the *other* side learned about via WS/poll (not their own completing
+    // ping) — surfaced in the notify log instead of force-navigating them into the
+    // room. Most recent first, one entry per room.
+    var recentMatches: [RoomDTO] = []
+
     // Radar/BLE only turns on once the user explicitly taps to connect —
     // arriving at Home no longer auto-activates it.
     var isConnected = false
     var isConnecting = false
 
-    // Set by HomeView when a room is created from a mutual match, to trigger navigation.
-    var pendingRoomID: UUID? = nil
     var radarDisarmed = false   // set true when heartbeat reports we left the radius
 
     struct Banner: Equatable {
@@ -42,10 +45,20 @@ final class HomeViewModel {
     private var usersTask: Task<Void, Never>? = nil
     private var eventsTask: Task<Void, Never>? = nil
     private var bannerClearTask: Task<Void, Never>? = nil
+    // Bumped on every subscribeStreams() call. A task closure only clears its own
+    // stored reference if its generation is still current — otherwise a cancelled-
+    // but-not-yet-unwound task from a previous subscription would blindly nil out
+    // a newer, still-live task's reference once it finally notices cancellation.
+    private var subscriptionGeneration = 0
+
+    // Stashed so handle(_:) can reach it for unseen-match bookkeeping —
+    // RadarEvent.mutualMatch arrives outside any per-call appState parameter.
+    private weak var appState: AppState?
 
     // Resubscribes to whatever radar session is already running — used when
     // returning to an already-connected Home (e.g. switching tabs and back).
     func start(appState: AppState) async {
+        self.appState = appState
         if !isConnected {
             // Optimistically show connected UI when there's an active event so we don't
             // flash TapToConnectView during the async actor call below.
@@ -71,6 +84,7 @@ final class HomeViewModel {
     // Explicit "Tap to Connect" action — this is what actually arms BLE
     // advertising/scanning, not just arriving at the Home tab.
     func connect(appState: AppState) async {
+        self.appState = appState
         guard let event = appState.activeEvent, let userID = appState.currentUser?.id else { return }
         isConnecting = true
         defer { isConnecting = false }
@@ -83,30 +97,50 @@ final class HomeViewModel {
         }()
 
         HapticManager.shared.startEngine()
-        await EventRadarService.shared.start(eventID: event.id, ownRadarToken: token, event: event)
+        await EventRadarService.shared.start(eventID: event.id, ownRadarToken: token, ownUserID: userID, event: event)
         isConnected = true
         subscribeStreams()
     }
 
+    // Idempotent — start(appState:) calls this every time HomeView reappears (tab
+    // switch back, popping from a pushed room, dismissing a sheet), which can fire
+    // far more often than a genuine "radar session changed". Each reappear opens a
+    // fresh per-subscriber broadcast stream from EventRadarService (see userUpdates()/
+    // events()), so a brief overlap between an old, cancelled-but-not-yet-unwound
+    // consumer and the new one is harmless — both receive every yield. Each task clears
+    // its own stored reference to nil right as its stream ends (rather than relying on a
+    // nil-check alone) — a `Task` reference stays non-nil even after the task naturally
+    // finishes, and the subscriptionGeneration guard stops a stale task from nil-ing a
+    // newer, still-live task's reference.
     private func subscribeStreams() {
+        guard usersTask == nil, eventsTask == nil else { return }
+        subscriptionGeneration += 1
+        let myGeneration = subscriptionGeneration
         let radar = EventRadarService.shared
-        usersTask?.cancel()
         usersTask = Task { @MainActor [weak self] in
             // Seed immediately with cached value so the radar isn't empty on re-subscribe
             let current = await radar.currentNearbyUsers
             self?.nearbyUsers = current
-            let stream = await radar.nearbyUsersStream
-            for await users in stream {
+            for await users in await radar.userUpdates() {
                 self?.nearbyUsers = users
             }
+            if self?.subscriptionGeneration == myGeneration { self?.usersTask = nil }
         }
-        eventsTask?.cancel()
         eventsTask = Task { @MainActor [weak self] in
-            let stream = await radar.eventStream
-            for await event in stream {
+            for await event in await radar.events() {
                 self?.handle(event)
             }
+            if self?.subscriptionGeneration == myGeneration { self?.eventsTask = nil }
         }
+    }
+
+    // Direct unread-badge poll for the chat-bubble red dot, driven by HomeView's .task
+    // (auto-cancelled on disappear). Mirrors MatchesViewModel's 5s poll so the badge on
+    // radar is exactly as prompt and reliable as the chat-list highlight — and, being a
+    // pure recompute from durable state, is immune to the radar event-stream's churn.
+    func refreshUnread(appState: AppState, ownUserID: UUID?) async {
+        guard let rooms = try? await MatchService.shared.fetchMatches() else { return }
+        appState.recomputeUnread(from: rooms, ownUserID: ownUserID)
     }
 
     private func handle(_ event: RadarEvent) {
@@ -117,9 +151,19 @@ final class HomeViewModel {
             receivedPings.removeAll { $0.fromUserID == ping.fromUserID }
             receivedPings.insert(ping, at: 0)
         case .mutualMatch(let roomID, let peerUserID):
+            // This is the *other* side of someone else's completing ping — surface it
+            // via the notify log instead of force-navigating; the completer (below, in
+            // sendPing) still gets taken straight into the room since they took the action.
             HapticManager.shared.play(.mutualMatch)
             if let peerUserID { receivedPings.removeAll { $0.fromUserID == peerUserID } }
-            Task { pendingRoomID = await resolveRoom(roomID: roomID, peerUserID: peerUserID) }
+            let peerNickname = peerUserID.flatMap { id in nearbyUsers.first(where: { $0.id == id })?.nickname }
+            showBanner(.init(kind: .match, text: peerNickname.map { "Matched with \($0)!" } ?? "You got a match!"))
+            Task {
+                let (_, room) = await resolveRoom(roomID: roomID, peerUserID: peerUserID)
+                // Chat bubble red dot is unread-messages-only now — a brand-new match is
+                // announced via the notify log's "Matches" section instead (below).
+                recordRecentMatch(room)
+            }
         case .leftRadius:
             HapticManager.shared.play(.error)
             radarDisarmed = true
@@ -133,10 +177,7 @@ final class HomeViewModel {
         do {
             let resp = try await PingService.shared.ping(eventID: eventID, toUserID: user.id)
             if resp.mutual, let roomID = resp.roomID {
-                HapticManager.shared.play(.mutualMatch)
-                showBanner(.init(kind: .match, text: "Matched with \(user.nickname)!"))
-                receivedPings.removeAll { $0.fromUserID == user.id }
-                pendingRoomID = await resolveRoom(roomID: roomID, peerUserID: user.id)
+                await handleCompletedMatch(roomID: roomID, peerUserID: user.id)
             } else {
                 showBanner(.init(kind: .pingSent, text: "Ping Sent"))
             }
@@ -145,14 +186,36 @@ final class HomeViewModel {
         }
     }
 
+    // Shared by both completer paths (in-app sendPing, Back Tap's .mutualMatchCreated).
+    // No auto-navigation into the room — surfaced via banner + notify log instead.
+    func handleCompletedMatch(roomID: UUID, peerUserID: UUID?) async {
+        // Pre-mark seen so the next pollLoop tick doesn't treat this room as a
+        // brand-new match and fire a redundant second banner/haptic — see
+        // EventRadarService.markRoomKnown for why this is needed.
+        await EventRadarService.shared.markRoomKnown(roomID)
+        if let peerUserID { receivedPings.removeAll { $0.fromUserID == peerUserID } }
+        HapticManager.shared.play(.mutualMatch)
+        let peerNickname = peerUserID.flatMap { id in nearbyUsers.first(where: { $0.id == id })?.nickname }
+        showBanner(.init(kind: .match, text: peerNickname.map { "Matched with \($0)!" } ?? "You got a match!"))
+        let (_, room) = await resolveRoom(roomID: roomID, peerUserID: peerUserID)
+        recordRecentMatch(room)
+    }
+
     // Prefer an existing room with this peer so chat history is preserved across events.
-    func resolveRoom(roomID: UUID, peerUserID: UUID?) async -> UUID {
-        guard let peerUserID else { return roomID }
+    // Also returns the matched RoomDTO when resolvable, for the notify log's match entry.
+    func resolveRoom(roomID: UUID, peerUserID: UUID?) async -> (roomID: UUID, room: RoomDTO?) {
+        guard let peerUserID else { return (roomID, nil) }
         if let rooms = try? await MatchService.shared.fetchMatches(),
            let existing = rooms.first(where: { $0.peerUserID == peerUserID }) {
-            return existing.id
+            return (existing.id, existing)
         }
-        return roomID
+        return (roomID, nil)
+    }
+
+    private func recordRecentMatch(_ room: RoomDTO?) {
+        guard let room else { return }
+        recentMatches.removeAll { $0.id == room.id }
+        recentMatches.insert(room, at: 0)
     }
 
     // Focus a blip so the Back Tap PingIntent targets it.
@@ -174,6 +237,9 @@ final class HomeViewModel {
         bannerClearTask?.cancel()
         bannerClearTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(3))
+            // try? only swallows the CancellationError, it doesn't stop execution — guard so a cancelled
+            // clear-task doesn't clear the newer banner that cancelled it.
+            guard !Task.isCancelled else { return }
             self?.banner = nil
         }
     }

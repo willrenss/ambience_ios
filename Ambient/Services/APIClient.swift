@@ -8,6 +8,21 @@ enum APIError: Error, Sendable {
     case unknown(Error)
 }
 
+/// Dedicated session for long-lived WebSocket tasks (radar + room sockets).
+///
+/// Mixing `URLSessionWebSocketTask` and REST `URLSessionDataTask` on the same
+/// session — especially `URLSession.shared` — lets an open socket occupy the
+/// per-host connection pool, so REST requests can stall behind it until the 60s
+/// request timeout (observed as "opening a chat makes everything slow for ~1 min,
+/// then it's fine"). Keeping sockets on their own session leaves the REST pool free.
+enum WebSocketSession {
+    static let shared: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.httpMaximumConnectionsPerHost = 8
+        return URLSession(configuration: config)
+    }()
+}
+
 actor APIClient {
     static let shared = APIClient()
 
@@ -90,6 +105,27 @@ actor APIClient {
         let bodyData = try encoder.encode(body)
         let request  = try makeRequest(method: "PATCH", path: path, body: bodyData)
         _ = try await perform(request)
+    }
+
+    // Multipart form-data upload — makeRequest's default "application/json" Content-Type
+    // gets overridden below with the multipart boundary. `fieldName` must match whatever
+    // the server route decodes its Content struct's file property as (e.g. "photo").
+    func uploadFile<T: Decodable>(_ path: String, fieldName: String, filename: String, mimeType: String, data: Data) async throws -> T {
+        var request = try makeRequest(method: "POST", path: path)
+        let boundary = "Boundary-\(UUID().uuidString)"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"\(fieldName)\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+        body.append(data)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = body
+
+        let responseData = try await perform(request)
+        do    { return try decoder.decode(T.self, from: responseData) }
+        catch { throw APIError.decodingError(error) }
     }
 
     func delete(_ path: String) async throws {

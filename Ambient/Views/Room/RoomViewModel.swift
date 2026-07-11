@@ -60,7 +60,14 @@ final class RoomViewModel {
             Task { @MainActor [weak self] in
                 await self?.startUWB(peerID: peerID)
             }
-            await connect(roomID: id)
+            // Connect the live-message socket in the background — do NOT await it.
+            // The room is already fully usable via REST (history is loaded, sending is
+            // a POST), so gating isLoading on the socket (which retries every 2s if the
+            // handshake is slow) would keep the loading spinner up and the composer
+            // feeling stuck for no reason.
+            Task { @MainActor [weak self] in
+                await self?.connect(roomID: id)
+            }
         } catch {
             errorMessage = "Failed to load chat."
         }

@@ -2,6 +2,8 @@ import SwiftUI
 
 struct HomeView: View {
     @State private var viewModel = HomeViewModel()
+    // Override for callers without a real presentation context (e.g. in-place overlay); falls back to dismiss.
+    var onDismiss: (() -> Void)? = nil
     @Environment(AppState.self) private var appState
     @Environment(NavigationRouter.self) private var router
     @Environment(\.dismiss) private var dismiss
@@ -28,6 +30,20 @@ struct HomeView: View {
         .onAppear {
             Task { await viewModel.start(appState: appState) }
         }
+        .task {
+            // Fast, reliable chat-bubble badge — polls /matches every 5s while radar is
+            // visible and recomputes the unread set directly, the same way the chat list
+            // does. SwiftUI auto-cancels this when HomeView disappears.
+            let ownUserID = appState.currentUser?.id
+            while !Task.isCancelled {
+                await viewModel.refreshUnread(appState: appState, ownUserID: ownUserID)
+                try? await Task.sleep(for: .seconds(5))
+            }
+        }
+        .onDisappear {
+            // Without this, tab-switching away leaves usersTask/eventsTask running as zombie consumers.
+            viewModel.stop()
+        }
         .sheet(item: $selectedUser) { user in
             RadarCardSheet(user: user) {
                 Task { await viewModel.sendPing(to: user, appState: appState) }
@@ -43,15 +59,14 @@ struct HomeView: View {
         }) {
             PingNotificationLogSheet(
                 pings: viewModel.receivedPings,
+                matches: viewModel.recentMatches,
                 nearbyUsers: viewModel.nearbyUsers,
-                onSelectUser: { user in pendingSelectedUser = user }
+                onSelectUser: { user in pendingSelectedUser = user },
+                onSelectMatch: {
+                    showNotificationLog = false
+                    appState.selectedTab = .bookmarks
+                }
             )
-        }
-        .onChange(of: viewModel.pendingRoomID) { _, roomID in
-            if let roomID {
-                viewModel.pendingRoomID = nil
-                router.push(roomID)
-            }
         }
         .onChange(of: viewModel.radarDisarmed) { _, disarmed in
             if disarmed {
@@ -65,13 +80,12 @@ struct HomeView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .mutualMatchCreated)) { note in
+            // Back Tap ping completed a match. Like the in-app sendPing completer
+            // path, this no longer auto-navigates — just banner + notify log, same
+            // as every other match path.
             guard let roomID = note.object as? UUID else { return }
             let peerUserID = note.userInfo?["peerUserID"] as? UUID
-            if let peerUserID { viewModel.receivedPings.removeAll { $0.fromUserID == peerUserID } }
-            Task {
-                let resolved = await viewModel.resolveRoom(roomID: roomID, peerUserID: peerUserID)
-                router.push(resolved)
-            }
+            Task { await viewModel.handleCompletedMatch(roomID: roomID, peerUserID: peerUserID) }
         }
         .alert("Error", isPresented: Binding(
             get: { viewModel.errorMessage != nil },
@@ -93,19 +107,86 @@ struct HomeView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: Spacing.sm) {
-            // Back — dismiss radar without checking out
-            Button { dismiss() } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(viewModel.isConnected ? Color.terracotta : .white)
-                    .frame(width: 36, height: 36)
-                    .background(.white.opacity(viewModel.isConnected ? 1 : 0.18), in: Circle())
+        VStack(spacing: Spacing.sm) {
+            HStack(spacing: Spacing.sm) {
+                // Back — dismiss radar without checking out
+                Button { onDismiss?() ?? dismiss() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(viewModel.isConnected ? Color.terracotta : .white)
+                        .frame(width: 36, height: 36)
+                        .background(.white.opacity(viewModel.isConnected ? 1 : 0.18), in: Circle())
+                }
+
+                Spacer()
+
+                // Center: event name. The toast used to live in this same row — moved
+                // to its own row below so long banner text wrapping to two lines can't
+                // shift these buttons vertically anymore.
+                if let event = appState.activeEvent {
+                    Text(event.name)
+                        .font(.labelSmall)
+                        .lineLimit(1)
+                        .foregroundStyle(viewModel.isConnected ? Color.terracotta : .white)
+                        .padding(.horizontal, Spacing.md)
+                        .padding(.vertical, Spacing.sm)
+                        .background(.white.opacity(viewModel.isConnected ? 1 : 0.18), in: Capsule())
+                        .frame(maxWidth: 140)
+                }
+
+                Spacer()
+
+                // Right: notification + chat + check out
+                HStack(spacing: Spacing.xs) {
+                    // Notification bell with badge dot
+                    Button { showNotificationLog = true } label: {
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "bell")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(viewModel.isConnected ? Color.terracotta : .white)
+                                .frame(width: 36, height: 36)
+                                .background(.white.opacity(viewModel.isConnected ? 1 : 0.18), in: Circle())
+                            if !viewModel.receivedPings.isEmpty || !viewModel.recentMatches.isEmpty {
+                                Circle()
+                                    .fill(Color.coral)
+                                    .frame(width: 10, height: 10)
+                                    .offset(x: 2, y: -2)
+                            }
+                        }
+                    }
+
+                    // Chat — switches to matches tab
+                    Button { appState.selectedTab = .bookmarks } label: {
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "bubble.left.and.bubble.right")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(viewModel.isConnected ? Color.terracotta : .white)
+                                .frame(width: 36, height: 36)
+                                .background(.white.opacity(viewModel.isConnected ? 1 : 0.18), in: Circle())
+                            if appState.hasUnseenMatches {
+                                Circle()
+                                    .fill(Color.coral)
+                                    .frame(width: 10, height: 10)
+                                    .offset(x: 2, y: -2)
+                            }
+                        }
+                    }
+
+                    // Check out
+                    Button { Task { await checkout() } } label: {
+                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(viewModel.isConnected ? Color.terracotta : .white)
+                            .frame(width: 36, height: 36)
+                            .background(.white.opacity(viewModel.isConnected ? 1 : 0.18), in: Circle())
+                    }
+                }
             }
 
-            Spacer()
-
-            // Center: banner when active, otherwise event name
+            // Toast — its own row below the button row (not inline with it), so it's
+            // free to wrap to two lines (long names, long text) without shifting the
+            // buttons above. Centered, capped width so it wraps/grows down instead of
+            // stretching edge-to-edge.
             if let banner = viewModel.banner {
                 HStack(spacing: 6) {
                     switch banner.kind {
@@ -118,7 +199,9 @@ struct HomeView: View {
                         Image(systemName: "dot.radiowaves.left.and.right")
                             .font(.system(size: 13, weight: .semibold))
                     }
-                    Text(banner.text).font(.titleSmall)
+                    Text(banner.text)
+                        .font(.titleSmall)
+                        .multilineTextAlignment(.leading)
                 }
                 .foregroundStyle(banner.kind == .pingSent ? Color.terracotta : .white)
                 .padding(.horizontal, Spacing.lg)
@@ -130,58 +213,11 @@ struct HomeView: View {
                     in: Capsule()
                 )
                 .shadow(color: .black.opacity(banner.kind == .pingSent ? 0.08 : 0), radius: 8, y: 2)
+                .frame(maxWidth: 280)
                 .transition(.move(edge: .top).combined(with: .opacity))
-            } else if let event = appState.activeEvent {
-                Text(event.name)
-                    .font(.labelSmall)
-                    .lineLimit(1)
-                    .foregroundStyle(viewModel.isConnected ? Color.terracotta : .white)
-                    .padding(.horizontal, Spacing.md)
-                    .padding(.vertical, Spacing.sm)
-                    .background(.white.opacity(viewModel.isConnected ? 1 : 0.18), in: Capsule())
-                    .frame(maxWidth: 140)
-            }
-
-            Spacer()
-
-            // Right: notification + chat + check out
-            HStack(spacing: Spacing.xs) {
-                // Notification bell with badge dot
-                Button { showNotificationLog = true } label: {
-                    ZStack(alignment: .topTrailing) {
-                        Image(systemName: "bell")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(viewModel.isConnected ? Color.terracotta : .white)
-                            .frame(width: 36, height: 36)
-                            .background(.white.opacity(viewModel.isConnected ? 1 : 0.18), in: Circle())
-                        if !viewModel.receivedPings.isEmpty {
-                            Circle()
-                                .fill(Color.coral)
-                                .frame(width: 10, height: 10)
-                                .offset(x: 2, y: -2)
-                        }
-                    }
-                }
-
-                // Chat — switches to matches tab
-                Button { appState.selectedTab = .bookmarks } label: {
-                    Image(systemName: "bubble.left.and.bubble.right")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(viewModel.isConnected ? Color.terracotta : .white)
-                        .frame(width: 36, height: 36)
-                        .background(.white.opacity(viewModel.isConnected ? 1 : 0.18), in: Circle())
-                }
-
-                // Check out
-                Button { Task { await checkout() } } label: {
-                    Image(systemName: "rectangle.portrait.and.arrow.right")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(viewModel.isConnected ? Color.terracotta : .white)
-                        .frame(width: 36, height: 36)
-                        .background(.white.opacity(viewModel.isConnected ? 1 : 0.18), in: Circle())
-                }
             }
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: viewModel.banner)
         .padding(.horizontal, Spacing.lg)
         .padding(.top, Spacing.sm)
     }
@@ -191,7 +227,8 @@ struct HomeView: View {
     private var connectedContent: some View {
         ZStack(alignment: .bottom) {
             VStack(spacing: Spacing.md) {
-                Spacer(minLength: 56)
+                // Clears the header's two rows (buttons + toast) so a showing toast doesn't overlap RadarView.
+                Spacer(minLength: 130)
 
                 RadarView(
                     users: viewModel.nearbyUsers,
@@ -210,7 +247,10 @@ struct HomeView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Explicit opaque backing — an in-place overlay doesn't get one for free like fullScreenCover did.
         .background(Color.peach.opacity(0.15))
+        .background(Color.white)
+        .ignoresSafeArea()
     }
 
     private var pingCarousel: some View {
@@ -371,8 +411,10 @@ private struct PingNotificationCard: View {
 
 private struct PingNotificationLogSheet: View {
     let pings: [PingNotificationDTO]
+    let matches: [RoomDTO]
     let nearbyUsers: [NearbyUser]
     var onSelectUser: (NearbyUser) -> Void
+    var onSelectMatch: () -> Void
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -382,33 +424,55 @@ private struct PingNotificationLogSheet: View {
                 .frame(width: 36, height: 4)
                 .padding(.top, Spacing.md)
 
-            Text("Pings")
+            Text("Notifications")
                 .font(.system(size: 17, weight: .semibold))
                 .padding(.vertical, Spacing.md)
 
             Divider()
 
-            if pings.isEmpty {
+            if pings.isEmpty && matches.isEmpty {
                 ContentUnavailableView(
-                    "No Pings Yet",
+                    "Nothing Yet",
                     systemImage: "bell.slash",
-                    description: Text("When someone pings you, they'll appear here.")
+                    description: Text("Pings and matches will appear here.")
                 )
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(pings) { ping in
-                            let nearbyUser = nearbyUsers.first { $0.id == ping.fromUserID }
-                            Button {
-                                if let user = nearbyUser {
-                                    onSelectUser(user)
-                                    dismiss()
+                    LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                        if !matches.isEmpty {
+                            Section {
+                                ForEach(matches) { room in
+                                    Button {
+                                        onSelectMatch()
+                                        dismiss()
+                                    } label: {
+                                        MatchLogRow(room: room)
+                                    }
+                                    .buttonStyle(.plain)
+                                    Divider().padding(.leading, 72)
                                 }
-                            } label: {
-                                PingLogRow(ping: ping, isNearby: nearbyUser != nil)
+                            } header: {
+                                LogSectionHeader(title: "Matches")
                             }
-                            .buttonStyle(.plain)
-                            Divider().padding(.leading, 72)
+                        }
+                        if !pings.isEmpty {
+                            Section {
+                                ForEach(pings) { ping in
+                                    let nearbyUser = nearbyUsers.first { $0.id == ping.fromUserID }
+                                    Button {
+                                        if let user = nearbyUser {
+                                            onSelectUser(user)
+                                            dismiss()
+                                        }
+                                    } label: {
+                                        PingLogRow(ping: ping, isNearby: nearbyUser != nil)
+                                    }
+                                    .buttonStyle(.plain)
+                                    Divider().padding(.leading, 72)
+                                }
+                            } header: {
+                                LogSectionHeader(title: "Pings")
+                            }
                         }
                     }
                 }
@@ -419,20 +483,85 @@ private struct PingNotificationLogSheet: View {
     }
 }
 
+private struct LogSectionHeader: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, Spacing.lg)
+            .padding(.vertical, Spacing.sm)
+            .background(.white)
+    }
+}
+
+private struct MatchLogRow: View {
+    let room: RoomDTO
+
+    var body: some View {
+        HStack(spacing: Spacing.md) {
+            if let urlStr = room.peerPhotoURL, let url = URL(string: urlStr) {
+                AsyncImage(url: url) { img in
+                    img.resizable().scaledToFill()
+                } placeholder: {
+                    matchAvatarPlaceholder
+                }
+                .frame(width: 48, height: 48)
+                .clipShape(Circle())
+            } else {
+                matchAvatarPlaceholder
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("\(room.peerNickname), \(room.peerAge)")
+                    .font(.system(size: 15, weight: .semibold))
+                Text("You matched! Tap to open chat 💬")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, Spacing.lg)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+    }
+
+    private var matchAvatarPlaceholder: some View {
+        Circle()
+            .fill(Color.successGreen.opacity(0.25))
+            .frame(width: 48, height: 48)
+            .overlay(
+                Text(String(room.peerNickname.prefix(1)).uppercased())
+                    .font(.system(.title3, design: .rounded).weight(.semibold))
+                    .foregroundStyle(Color.terracotta)
+            )
+    }
+}
+
 private struct PingLogRow: View {
     let ping: PingNotificationDTO
     let isNearby: Bool
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            Circle()
-                .fill(Color.apricot)
+            if let urlStr = ping.fromPhotoURL, let url = URL(string: urlStr) {
+                AsyncImage(url: url) { img in
+                    img.resizable().scaledToFill()
+                } placeholder: {
+                    pingAvatarPlaceholder
+                }
                 .frame(width: 48, height: 48)
-                .overlay(
-                    Text(String(ping.fromNickname.prefix(1)).uppercased())
-                        .font(.system(.title3, design: .rounded).weight(.semibold))
-                        .foregroundStyle(Color.terracotta)
-                )
+                .clipShape(Circle())
+            } else {
+                pingAvatarPlaceholder
+            }
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(ping.fromNickname)
@@ -459,6 +588,17 @@ private struct PingLogRow: View {
         .padding(.vertical, 12)
         .contentShape(Rectangle())
         .opacity(isNearby ? 1 : 0.5)
+    }
+
+    private var pingAvatarPlaceholder: some View {
+        Circle()
+            .fill(Color.apricot)
+            .frame(width: 48, height: 48)
+            .overlay(
+                Text(String(ping.fromNickname.prefix(1)).uppercased())
+                    .font(.system(.title3, design: .rounded).weight(.semibold))
+                    .foregroundStyle(Color.terracotta)
+            )
     }
 }
 
