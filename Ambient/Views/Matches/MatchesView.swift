@@ -125,12 +125,17 @@ private struct MatchRow: View {
         HStack(spacing: Spacing.md) {
             // Avatar
             ZStack(alignment: .topTrailing) {
-                Circle()
-                    .fill(Color(.systemGray4))
+                if let urlStr = room.peerPhotoURL, let url = URL(string: urlStr) {
+                    AsyncImage(url: url) { img in
+                        img.resizable().scaledToFill()
+                    } placeholder: {
+                        avatarPlaceholder
+                    }
                     .frame(width: avatarSize, height: avatarSize)
-                Text(String(room.peerNickname.prefix(1)).uppercased())
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .clipShape(Circle())
+                } else {
+                    avatarPlaceholder
+                }
                 if isUnseen {
                     Circle()
                         .fill(Color.coral)
@@ -159,5 +164,16 @@ private struct MatchRow: View {
         .padding(.vertical, 12)
         .background(isUnseen ? Color.peach.opacity(0.3) : .clear)
         .contentShape(Rectangle())
+    }
+
+    private var avatarPlaceholder: some View {
+        ZStack {
+            Circle()
+                .fill(Color(.systemGray4))
+                .frame(width: avatarSize, height: avatarSize)
+            Text(String(room.peerNickname.prefix(1)).uppercased())
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(.white)
+        }
     }
 }

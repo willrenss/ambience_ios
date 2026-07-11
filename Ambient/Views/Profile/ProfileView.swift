@@ -1,10 +1,13 @@
 import SwiftUI
+import PhotosUI
 
 struct ProfileView: View {
     @Environment(AppState.self) private var appState
     @Environment(NavigationRouter.self) private var router
     @State private var viewModel: ProfileViewModel?
     @State private var notificationsEnabled: Bool = false
+    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var isUploadingPhoto = false
 
     @AppStorage("haptics_enabled") private var hapticsEnabled: Bool = true
     @AppStorage("uwb_enabled")     private var uwbEnabled: Bool = true
@@ -168,6 +171,18 @@ struct ProfileView: View {
             guard !t.isEmpty, URL(string: t) != nil else { return }
             ServerConfig.setURL(t)
         }
+        .onChange(of: selectedPhotoItem) { _, item in
+            guard let item else { return }
+            Task {
+                isUploadingPhoto = true
+                defer { isUploadingPhoto = false; selectedPhotoItem = nil }
+                guard let data = try? await item.loadTransferable(type: Data.self),
+                      let image = UIImage(data: data),
+                      let compressed = image.resizedForUpload()
+                else { return }
+                await viewModel?.uploadPhoto(compressed)
+            }
+        }
     }
 
     // MARK: - Avatar section
@@ -187,15 +202,24 @@ struct ProfileView: View {
                     avatarCircle
                 }
 
-                // Edit button
-                ZStack {
-                    Circle()
-                        .fill(Color.terracotta)
-                        .frame(width: 28, height: 28)
-                    Image(systemName: "pencil")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
+                // PhotosPicker runs out-of-process — no NSPhotoLibraryUsageDescription/permission prompt needed.
+                PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.terracotta)
+                            .frame(width: 28, height: 28)
+                        if isUploadingPhoto {
+                            ProgressView()
+                                .tint(.white)
+                                .scaleEffect(0.6)
+                        } else {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(.white)
+                        }
+                    }
                 }
+                .disabled(isUploadingPhoto)
                 .offset(x: 2, y: 2)
             }
 
@@ -350,5 +374,22 @@ private struct InterestsPickerSheet: View {
             selected = Set(viewModel.user?.interests ?? [])
         }
         .presentationDetents([.medium, .large])
+    }
+}
+
+// MARK: - Photo resize helper
+
+private extension UIImage {
+    // Downscales to a max 512pt dimension and re-encodes as JPEG before upload —
+    // a profile picture never needs to be full camera resolution, and this keeps
+    // uploads fast and radar/chat-list image loads cheap for everyone who sees it.
+    func resizedForUpload(maxDimension: CGFloat = 512, quality: CGFloat = 0.75) -> Data? {
+        let scale = min(1, maxDimension / max(size.width, size.height))
+        let targetSize = CGSize(width: size.width * scale, height: size.height * scale)
+        let renderer = UIGraphicsImageRenderer(size: targetSize)
+        let resized = renderer.image { _ in
+            draw(in: CGRect(origin: .zero, size: targetSize))
+        }
+        return resized.jpegData(compressionQuality: quality)
     }
 }

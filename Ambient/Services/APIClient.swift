@@ -107,6 +107,27 @@ actor APIClient {
         _ = try await perform(request)
     }
 
+    // Multipart form-data upload — makeRequest's default "application/json" Content-Type
+    // gets overridden below with the multipart boundary. `fieldName` must match whatever
+    // the server route decodes its Content struct's file property as (e.g. "photo").
+    func uploadFile<T: Decodable>(_ path: String, fieldName: String, filename: String, mimeType: String, data: Data) async throws -> T {
+        var request = try makeRequest(method: "POST", path: path)
+        let boundary = "Boundary-\(UUID().uuidString)"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"\(fieldName)\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+        body.append(data)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = body
+
+        let responseData = try await perform(request)
+        do    { return try decoder.decode(T.self, from: responseData) }
+        catch { throw APIError.decodingError(error) }
+    }
+
     func delete(_ path: String) async throws {
         let request = try makeRequest(method: "DELETE", path: path)
         _ = try await perform(request)

@@ -62,14 +62,17 @@ struct RoomView: View {
             Spacer()
 
             VStack(spacing: 4) {
-                Circle()
-                    .fill(Color.coral.opacity(0.25))
-                    .frame(width: 52, height: 52)
-                    .overlay {
-                        Text(String(viewModel.room?.peerNickname.prefix(1) ?? "?").uppercased())
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(Color.terracotta)
+                if let urlStr = viewModel.room?.peerPhotoURL, let url = URL(string: urlStr) {
+                    AsyncImage(url: url) { img in
+                        img.resizable().scaledToFill()
+                    } placeholder: {
+                        chatAvatarPlaceholder
                     }
+                    .frame(width: 52, height: 52)
+                    .clipShape(Circle())
+                } else {
+                    chatAvatarPlaceholder
+                }
                 Text(viewModel.room?.peerNickname ?? "")
                     .font(.system(size: 13))
                     .foregroundStyle(.primary)
@@ -82,6 +85,17 @@ struct RoomView: View {
         .padding(.horizontal, 12)
         .padding(.top, 4)
         .padding(.bottom, 8)
+    }
+
+    private var chatAvatarPlaceholder: some View {
+        Circle()
+            .fill(Color.coral.opacity(0.25))
+            .frame(width: 52, height: 52)
+            .overlay {
+                Text(String(viewModel.room?.peerNickname.prefix(1) ?? "?").uppercased())
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(Color.terracotta)
+            }
     }
 
     // MARK: - Message list

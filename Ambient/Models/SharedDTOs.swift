@@ -603,6 +603,7 @@ struct PingNotificationDTO: Sendable, Identifiable {
     let fromUserID: UUID
     let fromNickname: String
     let fromAge: Int
+    let fromPhotoURL: String?
     let eventID: UUID
     let createdAt: Date
 
@@ -610,12 +611,13 @@ struct PingNotificationDTO: Sendable, Identifiable {
 }
 
 extension PingNotificationDTO: Codable {
-    private enum CodingKeys: CodingKey { case fromUserID, fromNickname, fromAge, eventID, createdAt }
+    private enum CodingKeys: CodingKey { case fromUserID, fromNickname, fromAge, fromPhotoURL, eventID, createdAt }
     nonisolated init(from decoder: any Decoder) throws {
         let c        = try decoder.container(keyedBy: CodingKeys.self)
         fromUserID   = try c.decode(UUID.self,   forKey: .fromUserID)
         fromNickname = try c.decode(String.self, forKey: .fromNickname)
         fromAge      = try c.decode(Int.self,    forKey: .fromAge)
+        fromPhotoURL = try c.decodeIfPresent(String.self, forKey: .fromPhotoURL)
         eventID      = try c.decode(UUID.self,   forKey: .eventID)
         createdAt    = try c.decode(Date.self,   forKey: .createdAt)
     }
@@ -624,6 +626,7 @@ extension PingNotificationDTO: Codable {
         try c.encode(fromUserID,   forKey: .fromUserID)
         try c.encode(fromNickname, forKey: .fromNickname)
         try c.encode(fromAge,      forKey: .fromAge)
+        try c.encodeIfPresent(fromPhotoURL, forKey: .fromPhotoURL)
         try c.encode(eventID,      forKey: .eventID)
         try c.encode(createdAt,    forKey: .createdAt)
     }
@@ -635,6 +638,7 @@ struct RoomDTO: Sendable, Identifiable {
     let peerUserID: UUID
     let peerNickname: String
     let peerAge: Int
+    let peerPhotoURL: String?
     let eventID: UUID?
     let eventName: String?
     let createdAt: Date?
@@ -650,7 +654,7 @@ struct RoomDTO: Sendable, Identifiable {
 
 extension RoomDTO: Codable {
     private enum CodingKeys: CodingKey {
-        case id, codeRoom, peerUserID, peerNickname, peerAge, eventID, eventName, createdAt, updatedAt, lastMessageSenderID, lastMessageText, isInitiator
+        case id, codeRoom, peerUserID, peerNickname, peerAge, peerPhotoURL, eventID, eventName, createdAt, updatedAt, lastMessageSenderID, lastMessageText, isInitiator
     }
     nonisolated init(from decoder: any Decoder) throws {
         let c        = try decoder.container(keyedBy: CodingKeys.self)
@@ -659,6 +663,7 @@ extension RoomDTO: Codable {
         peerUserID   = try c.decode(UUID.self,   forKey: .peerUserID)
         peerNickname = try c.decode(String.self, forKey: .peerNickname)
         peerAge      = try c.decode(Int.self,    forKey: .peerAge)
+        peerPhotoURL = try c.decodeIfPresent(String.self, forKey: .peerPhotoURL)
         eventID      = try c.decodeIfPresent(UUID.self,   forKey: .eventID)
         eventName    = try c.decodeIfPresent(String.self, forKey: .eventName)
         createdAt    = try c.decodeIfPresent(Date.self,   forKey: .createdAt)
@@ -674,6 +679,7 @@ extension RoomDTO: Codable {
         try c.encode(peerUserID,   forKey: .peerUserID)
         try c.encode(peerNickname, forKey: .peerNickname)
         try c.encode(peerAge,      forKey: .peerAge)
+        try c.encodeIfPresent(peerPhotoURL, forKey: .peerPhotoURL)
         try c.encodeIfPresent(eventID,   forKey: .eventID)
         try c.encodeIfPresent(eventName, forKey: .eventName)
         try c.encodeIfPresent(createdAt, forKey: .createdAt)
