@@ -324,6 +324,12 @@ actor EventRadarService {
         emit(.mutualMatch(roomID: roomID, peerUserID: peerUserID))
     }
 
+    // Pre-marks a room seen so the completer side's own pollLoop doesn't fire a
+    // duplicate .mutualMatch for a match it already knows about synchronously.
+    func markRoomKnown(_ roomID: UUID) {
+        seenMatchRoomIDs.insert(roomID)
+    }
+
     // MARK: - Build radar blips (GPS-only)
 
     private func yieldUsers() {

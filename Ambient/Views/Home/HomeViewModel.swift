@@ -34,8 +34,6 @@ final class HomeViewModel {
     var isConnected = false
     var isConnecting = false
 
-    // Set by HomeView when a room is created from a mutual match, to trigger navigation.
-    var pendingRoomID: UUID? = nil
     var radarDisarmed = false   // set true when heartbeat reports we left the radius
 
     struct Banner: Equatable {
@@ -179,18 +177,28 @@ final class HomeViewModel {
         do {
             let resp = try await PingService.shared.ping(eventID: eventID, toUserID: user.id)
             if resp.mutual, let roomID = resp.roomID {
-                HapticManager.shared.play(.mutualMatch)
-                showBanner(.init(kind: .match, text: "Matched with \(user.nickname)!"))
-                receivedPings.removeAll { $0.fromUserID == user.id }
-                let (resolvedRoomID, room) = await resolveRoom(roomID: roomID, peerUserID: user.id)
-                recordRecentMatch(room)
-                pendingRoomID = resolvedRoomID
+                await handleCompletedMatch(roomID: roomID, peerUserID: user.id)
             } else {
                 showBanner(.init(kind: .pingSent, text: "Ping Sent"))
             }
         } catch {
             errorMessage = "Couldn't send ping."
         }
+    }
+
+    // Shared by both completer paths (in-app sendPing, Back Tap's .mutualMatchCreated).
+    // No auto-navigation into the room — surfaced via banner + notify log instead.
+    func handleCompletedMatch(roomID: UUID, peerUserID: UUID?) async {
+        // Pre-mark seen so the next pollLoop tick doesn't treat this room as a
+        // brand-new match and fire a redundant second banner/haptic — see
+        // EventRadarService.markRoomKnown for why this is needed.
+        await EventRadarService.shared.markRoomKnown(roomID)
+        if let peerUserID { receivedPings.removeAll { $0.fromUserID == peerUserID } }
+        HapticManager.shared.play(.mutualMatch)
+        let peerNickname = peerUserID.flatMap { id in nearbyUsers.first(where: { $0.id == id })?.nickname }
+        showBanner(.init(kind: .match, text: peerNickname.map { "Matched with \($0)!" } ?? "You got a match!"))
+        let (_, room) = await resolveRoom(roomID: roomID, peerUserID: peerUserID)
+        recordRecentMatch(room)
     }
 
     // Prefer an existing room with this peer so chat history is preserved across events.
@@ -229,6 +237,9 @@ final class HomeViewModel {
         bannerClearTask?.cancel()
         bannerClearTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(3))
+            // try? only swallows the CancellationError, it doesn't stop execution — guard so a cancelled
+            // clear-task doesn't clear the newer banner that cancelled it.
+            guard !Task.isCancelled else { return }
             self?.banner = nil
         }
     }
