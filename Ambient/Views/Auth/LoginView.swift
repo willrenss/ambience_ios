@@ -145,20 +145,20 @@ private struct NameStep: View {
                 Spacer()
                 Ellipse()
                     .fill(darkOrange)
-                    .frame(width: UIScreen.main.bounds.width * 1, height: 350)
+                    .frame(maxWidth: .infinity, minHeight: 350, maxHeight: 350)
                     .offset(y: 150)
             }
             .ignoresSafeArea()
             
             // MARK: - Main Content
             VStack(alignment: .leading, spacing: 0) {
-                
+
                 // Typography Section
                 VStack(alignment: .leading, spacing: -5) {
                     Text("Lets")
                         .font(.system(size: 54, weight: .black, design: .default))
                         .foregroundColor(darkOrange)
-                    
+
                     Text("Get to\nKnow Each\nOther!")
                         .font(.system(size: 54, weight: .black, design: .default))
                         .foregroundColor(.white)
@@ -249,6 +249,7 @@ private struct NameStep: View {
             }
             .padding(.horizontal, 32)
         }
+        .onTapGesture { focused = false }
     }
 }
 
@@ -392,7 +393,7 @@ private let allAgeGroups: [OnboardingAgeGroup] = [
 private struct AgeStep: View {
     @Bindable var vm: OnboardingViewModel
     @State private var selectedIndex: Int = 1
-    @State private var scrollAnchor: Int? = 1
+    @State private var scrollAnchor: Int? = nil
 
     var body: some View {
         GeometryReader { geo in
@@ -444,6 +445,7 @@ private struct AgeStep: View {
                 }
                 .onAppear {
                     vm.ageText = String(allAgeGroups[selectedIndex].midAge)
+                    scrollAnchor = selectedIndex
                 }
 
                 Spacer()
@@ -660,6 +662,7 @@ private struct HometownStep: View {
                     .padding(.bottom, max(geo.safeAreaInsets.bottom, 24))
                 }
             }
+            .onTapGesture { focused = false }
         }
         .ignoresSafeArea(edges: .bottom)
         .background(Color.white)
@@ -757,6 +760,7 @@ struct TowerShape: Shape {
 
 private struct InterestsStep: View {
     @Bindable var vm: OnboardingViewModel
+    @FocusState private var searchFocused: Bool
 
     var body: some View {
         GeometryReader { geo in
@@ -780,7 +784,29 @@ private struct InterestsStep: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 28)
-                .padding(.bottom, 20)
+                .padding(.bottom, 12)
+
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 15))
+                        .foregroundStyle(.secondary)
+                    TextField("Search interests...", text: $vm.searchText)
+                        .font(.system(size: 15))
+                        .focused($searchFocused)
+                        .autocorrectionDisabled()
+                    if !vm.searchText.isEmpty {
+                        Button { vm.searchText = "" } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 15))
+                                .foregroundStyle(Color(.tertiaryLabel))
+                        }
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .padding(.horizontal, 24)
+                .padding(.bottom, 12)
 
                 ScrollView {
                     FlowLayout(spacing: 10) {
@@ -795,6 +821,7 @@ private struct InterestsStep: View {
                     .padding(.horizontal, 24)
                     .padding(.bottom, 16)
                 }
+                .scrollDismissesKeyboard(.interactively)
 
                 if let error = vm.errorMessage {
                     Text(error).font(.caption).foregroundStyle(Color.errorRed)
@@ -809,6 +836,7 @@ private struct InterestsStep: View {
                 )
                 .padding(.horizontal, 28)
             }
+            .onTapGesture { searchFocused = false }
         }
         .ignoresSafeArea(edges: .bottom)
         .background(.white)
@@ -853,4 +881,6 @@ private struct OnboardingInterestChip: View {
         .animation(.spring(duration: 0.2), value: isSelected)
     }
 }
+
+
 

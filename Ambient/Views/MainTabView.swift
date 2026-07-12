@@ -72,8 +72,8 @@ private struct FloatingTabBar: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.white, in: Capsule())
-        .shadow(color: .black.opacity(0.12), radius: 16, y: 4)
+        .background(.ultraThinMaterial, in: Capsule())
+        .shadow(color: .black.opacity(0.10), radius: 16, y: 4)
     }
 
     private func tabButton(tab: AppTab, icon: String, label: String) -> some View {

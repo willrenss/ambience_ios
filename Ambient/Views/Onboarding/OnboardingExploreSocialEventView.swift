@@ -13,9 +13,10 @@ struct OnboardingExploreSocialEventView: View {
     var onNext: () -> Void = {}
     
     var body: some View {
+        GeometryReader { geo in
         VStack(spacing: 0) {
             MapIllustrationView()
-                .frame(height: UIScreen.main.bounds.height * 0.58)
+                .frame(height: geo.size.height * 0.58)
                 .clipShape(RoundedRectangle(cornerRadius: 60, style: .continuous))
                 .ignoresSafeArea(.all, edges: .top)
             
@@ -69,6 +70,7 @@ struct OnboardingExploreSocialEventView: View {
             }
             .padding(.horizontal, 32)
             .padding(.top, -33)
+        }
         }
     }
 }

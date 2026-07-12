@@ -17,8 +17,9 @@ struct EventMapView: View {
     )
     @Environment(AppState.self) private var appState
 
-    private let teal = Color(hex: 0x1E7082)
-    
+    private let teal  = Color(hex: 0x1E7082)
+    private let brand = Color(hex: 0xD63200)
+
     var body: some View {
         @Bindable var viewModel = viewModel
         @Bindable var appState = appState
@@ -28,13 +29,14 @@ struct EventMapView: View {
             // Full-screen map
             Map(position: $cameraPosition) {
                 UserAnnotation()
-                ForEach(viewModel.trending) { event in
+                ForEach(viewModel.mapTrending) { event in
                     Annotation("", coordinate: CLLocationCoordinate2D(
                         latitude: event.latitude,
                         longitude: event.longitude
                     )) {
                         EventMapPin(
                             event: event,
+                            isSelected: previewEvent?.id == event.id || appState.activeEvent?.id == event.id,
                             isActive: appState.activeEvent?.id == event.id
                         )
                         .onTapGesture {
@@ -85,9 +87,30 @@ struct EventMapView: View {
                 // ── Category chips ──────────────────────────────────────────
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: Spacing.sm) {
+                        // Heart — bookmark filter (separate endpoint, independent of search)
+                        Button {
+                            viewModel.toggleMapBookmark()
+                        } label: {
+                            ZStack {
+                                if viewModel.isMapBookmarkLoading {
+                                    ProgressView()
+                                        .scaleEffect(0.7)
+                                        .tint(viewModel.mapBookmarkActive ? .white : teal)
+                                } else {
+                                    Image(systemName: viewModel.mapBookmarkActive ? "heart.fill" : "heart")
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundStyle(viewModel.mapBookmarkActive ? .white : teal)
+                                }
+                            }
+                            .frame(width: 36, height: 36)
+                            .background(viewModel.mapBookmarkActive ? teal : Color.white, in: Circle())
+                            .shadow(color: .black.opacity(0.07), radius: 4, y: 1)
+                        }
+
                         ForEach(EventsViewModel.categories, id: \.self) { cat in
                             Button {
                                 viewModel.selectedCategory = viewModel.selectedCategory == cat ? nil : cat
+                                if viewModel.selectedCategory != nil { viewModel.mapBookmarkActive = false }
                             } label: {
                                 Text(cat)
                                     .font(.system(size: 14, weight: .medium))
@@ -242,7 +265,7 @@ struct EventMapView: View {
                     if let cat = event.category {
                         Text(cat)
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(teal)
+                            .foregroundStyle(brand)
                     }
                     Text(event.name)
                         .font(.system(size: 17, weight: .bold))
@@ -265,7 +288,7 @@ struct EventMapView: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, Spacing.sm)
                             .padding(.vertical, 4)
-                            .background(teal, in: Capsule())
+                            .background(brand, in: Capsule())
                         } else {
                             SearchPriceBadge(event: event)
                         }
@@ -284,7 +307,7 @@ struct EventMapView: View {
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundStyle(.white)
                                     .frame(width: 28, height: 28)
-                                    .background(teal, in: Circle())
+                                    .background(brand, in: Circle())
                                     .overlay(Circle().stroke(.white, lineWidth: 2))
                             }
                         }
@@ -395,34 +418,47 @@ private struct RadarHost: View {
 
 private struct EventMapPin: View {
     let event: EventDTO
+    var isSelected: Bool = false
     var isActive: Bool = false
-    
+
     private let teal = Color(hex: 0x1E7082)
-    
+
     var body: some View {
         VStack(spacing: 4) {
             ZStack {
-                // Outer ring for active event
-                if isActive {
+                // Outer pulse ring when selected or active
+                if isSelected {
                     Circle()
-                        .stroke(Color.coral.opacity(0.35), lineWidth: 3)
-                        .frame(width: 60, height: 60)
+                        .stroke(Color.coral.opacity(0.3), lineWidth: 4)
+                        .frame(width: 62, height: 62)
                 }
+
+                // Gradient fill — merah saat di-tap/selected, teal saat normal
                 Circle()
-                    .fill(isActive ? Color.coral : teal)
+                    .fill(
+                        LinearGradient(
+                            colors: isSelected
+                                ? [Color.coral, Color(red: 0.72, green: 0.14, blue: 0.14)]
+                                : [teal, Color(hex: 0x134F5C)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
                     .frame(width: 48, height: 48)
-                    .shadow(color: .black.opacity(0.22), radius: 6, y: 3)
-                
+                    .overlay(Circle().stroke(.white, lineWidth: 2.5))
+                    .shadow(color: (isSelected ? Color.coral : teal).opacity(0.4), radius: 8, y: 4)
+
                 Image(systemName: isActive ? "checkmark" : categoryIcon)
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(.white)
             }
-            
+
             Text(event.name)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
         }
+        .animation(.easeInOut(duration: 0.2), value: isSelected)
     }
     
     private var categoryIcon: String {
@@ -553,12 +589,15 @@ struct EventSearchCover: View {
     private var categoryChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Spacing.sm) {
-                Button { viewModel.selectedCategory = nil } label: {
-                    Image(systemName: viewModel.selectedCategory == nil ? "heart.fill" : "heart")
-                        .foregroundStyle(viewModel.selectedCategory == nil ? .white : teal)
+                Button {
+                    viewModel.showBookmarkedOnly.toggle()
+                    if viewModel.showBookmarkedOnly { viewModel.selectedCategory = nil }
+                } label: {
+                    Image(systemName: viewModel.showBookmarkedOnly ? "heart.fill" : "heart")
+                        .foregroundStyle(viewModel.showBookmarkedOnly ? .white : teal)
                         .frame(width: 36, height: 36)
                         .background(
-                            viewModel.selectedCategory == nil ? teal : Color.white.opacity(0.7),
+                            viewModel.showBookmarkedOnly ? teal : Color.white.opacity(0.7),
                             in: Circle()
                         )
                 }
@@ -568,7 +607,10 @@ struct EventSearchCover: View {
                     .frame(width: 36, height: 36)
                     .background(Color.white.opacity(0.7), in: Circle())
                 ForEach(EventsViewModel.categories, id: \.self) { cat in
-                    Button { viewModel.selectedCategory = cat } label: {
+                    Button {
+                        viewModel.selectedCategory = viewModel.selectedCategory == cat ? nil : cat
+                        if viewModel.selectedCategory != nil { viewModel.showBookmarkedOnly = false }
+                    } label: {
                         Text(cat)
                             .font(.labelLarge)
                             .foregroundStyle(viewModel.selectedCategory == cat ? .white : teal)
@@ -659,7 +701,7 @@ private struct SearchPriceBadge: View {
             .font(.labelSmall).foregroundStyle(.white)
             .lineLimit(1).minimumScaleFactor(0.8)
             .padding(.horizontal, Spacing.sm).padding(.vertical, 4)
-            .background(Color(hex: 0x1E7082), in: Capsule())
+            .background(Color(hex: 0xD63200), in: Capsule())
     }
     
     private var label: String {

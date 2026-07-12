@@ -59,6 +59,11 @@ actor EventService {
     func unbookmark(eventID: UUID) async throws {
         try await APIClient.shared.delete("/events/\(eventID.uuidString)/bookmark")
     }
+
+    /// Dedicated endpoint for map bookmark filter — separate from the search/browse flow.
+    func fetchBookmarkedEvents() async throws -> [EventDTO] {
+        try await APIClient.shared.get("/events/bookmarks")
+    }
 }
 
 struct EmptyBody: Sendable {}
