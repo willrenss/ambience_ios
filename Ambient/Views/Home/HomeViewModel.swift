@@ -147,7 +147,7 @@ final class HomeViewModel {
         switch event {
         case .pingReceived(let ping):
             HapticManager.shared.play(.receivePing)
-            showBanner(.init(kind: .ping, text: "\(ping.fromNickname), \(ping.fromAge) pinged you"))
+            showBanner(.init(kind: .ping, text: "\(ping.fromNickname), \(NearbyUser.generation(for: ping.fromAge)) pinged you"))
             receivedPings.removeAll { $0.fromUserID == ping.fromUserID }
             receivedPings.insert(ping, at: 0)
         case .mutualMatch(let roomID, let peerUserID):

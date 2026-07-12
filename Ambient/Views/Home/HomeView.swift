@@ -507,7 +507,7 @@ private struct MatchLogRow: View {
             }
 
             VStack(alignment: .leading, spacing: 3) {
-                Text("\(room.peerNickname), \(room.peerAge)")
+                Text("\(room.peerNickname), \(NearbyUser.generation(for: room.peerAge))")
                     .font(.system(size: 15, weight: .semibold))
                 Text("You matched! Tap to open chat 💬")
                     .font(.system(size: 13))
