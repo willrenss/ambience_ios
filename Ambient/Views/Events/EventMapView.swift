@@ -91,20 +91,12 @@ struct EventMapView: View {
                         Button {
                             viewModel.toggleMapBookmark()
                         } label: {
-                            ZStack {
-                                if viewModel.isMapBookmarkLoading {
-                                    ProgressView()
-                                        .scaleEffect(0.7)
-                                        .tint(viewModel.mapBookmarkActive ? .white : teal)
-                                } else {
-                                    Image(systemName: viewModel.mapBookmarkActive ? "heart.fill" : "heart")
-                                        .font(.system(size: 15, weight: .semibold))
-                                        .foregroundStyle(viewModel.mapBookmarkActive ? .white : teal)
-                                }
-                            }
-                            .frame(width: 36, height: 36)
-                            .background(viewModel.mapBookmarkActive ? teal : Color.white, in: Circle())
-                            .shadow(color: .black.opacity(0.07), radius: 4, y: 1)
+                            Image(systemName: viewModel.mapBookmarkActive ? "heart.fill" : "heart")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(viewModel.mapBookmarkActive ? .white : teal)
+                                .frame(width: 36, height: 36)
+                                .background(viewModel.mapBookmarkActive ? teal : Color.white, in: Circle())
+                                .shadow(color: .black.opacity(0.07), radius: 4, y: 1)
                         }
 
                         ForEach(EventsViewModel.categories, id: \.self) { cat in

@@ -12,10 +12,8 @@ final class EventsViewModel {
     var errorMessage: String? = nil
 
     // ── Map bookmark filter ─────────────────────────────────────────────────
-    // Completely separate from showBookmarkedOnly: uses a dedicated server endpoint
-    // so toggling heart on the map doesn't affect the search view and vice versa.
+    // Same client-side source as showBookmarkedOnly so both views stay in sync.
     var mapBookmarkActive: Bool = false
-    var mapBookmarkedEvents: [EventDTO] = []
     var isMapBookmarkLoading: Bool = false
 
     // Disesuaikan urutannya agar sama persis dengan screenshot
@@ -32,33 +30,16 @@ final class EventsViewModel {
         return events.filter { $0.category == selectedCategory }
     }
 
-    // Used ONLY by EventMapView — server-fetched bookmark filter, separate endpoint.
+    // Used ONLY by EventMapView — same client-side source as trending so both stay in sync.
     var mapTrending: [EventDTO] {
-        if mapBookmarkActive { return mapBookmarkedEvents }
+        if mapBookmarkActive { return events.filter { $0.isBookmarked } }
         guard let selectedCategory else { return events }
         return events.filter { $0.category == selectedCategory }
     }
 
-    // Synchronous toggle — UI reacts immediately; fetch happens in background.
     func toggleMapBookmark() {
         mapBookmarkActive.toggle()
-        if mapBookmarkActive {
-            selectedCategory = nil
-            Task { await fetchMapBookmarks() }
-        } else {
-            mapBookmarkedEvents = []
-        }
-    }
-
-    private func fetchMapBookmarks() async {
-        isMapBookmarkLoading = true
-        defer { isMapBookmarkLoading = false }
-        do {
-            mapBookmarkedEvents = try await EventService.shared.fetchBookmarkedEvents()
-        } catch {
-            mapBookmarkedEvents = []
-            // mapBookmarkActive stays true — user sees empty filter, not silent reset
-        }
+        if mapBookmarkActive { selectedCategory = nil }
     }
 
     var searchResults: [EventDTO] {
