@@ -392,7 +392,7 @@ private let allAgeGroups: [OnboardingAgeGroup] = [
 private struct AgeStep: View {
     @Bindable var vm: OnboardingViewModel
     @State private var selectedIndex: Int = 1
-    @State private var scrollAnchor: Int? = 1
+    @State private var scrollAnchor: Int? = nil
 
     var body: some View {
         GeometryReader { geo in
@@ -444,6 +444,7 @@ private struct AgeStep: View {
                 }
                 .onAppear {
                     vm.ageText = String(allAgeGroups[selectedIndex].midAge)
+                    scrollAnchor = selectedIndex
                 }
 
                 Spacer()
@@ -780,7 +781,28 @@ private struct InterestsStep: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 28)
-                .padding(.bottom, 20)
+                .padding(.bottom, 12)
+
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 15))
+                        .foregroundStyle(.secondary)
+                    TextField("Search interests...", text: $vm.searchText)
+                        .font(.system(size: 15))
+                        .autocorrectionDisabled()
+                    if !vm.searchText.isEmpty {
+                        Button { vm.searchText = "" } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 15))
+                                .foregroundStyle(Color(.tertiaryLabel))
+                        }
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .padding(.horizontal, 24)
+                .padding(.bottom, 12)
 
                 ScrollView {
                     FlowLayout(spacing: 10) {
@@ -853,4 +875,6 @@ private struct OnboardingInterestChip: View {
         .animation(.spring(duration: 0.2), value: isSelected)
     }
 }
+
+
 

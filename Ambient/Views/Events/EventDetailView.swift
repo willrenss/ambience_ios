@@ -580,6 +580,7 @@ struct EventDetailView: View {
     @State private var viewModel = EventDetailViewModel()
     @State private var showStatusIntent = false
     @State private var statusIntentConfirmed = false
+    @State private var showLocationMismatch = false
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
 
@@ -817,13 +818,20 @@ struct EventDetailView: View {
                 .ignoresSafeArea(edges: .bottom)
             }
         }
-        .fullScreenCover(isPresented: $showStatusIntent, onDismiss: {
+        .sheet(isPresented: $showLocationMismatch) {
+            LocationNotMatchSheet(distanceMeters: viewModel.distanceMeters)
+                .presentationDetents([.height(280)])
+                .presentationCornerRadius(24)
+        }
+        .sheet(isPresented: $showStatusIntent, onDismiss: {
             if statusIntentConfirmed { dismiss() }
         }) {
             StatusIntentView { status in
                 try? await APIClient.shared.patch("/me", body: StatusPatchBody(status: status))
                 statusIntentConfirmed = true
             }
+            .presentationDetents([.height(340)])
+            .presentationCornerRadius(24)
         }
         .navigationBarHidden(true)
         .navigationBarBackButtonHidden(true)
@@ -856,16 +864,14 @@ struct EventDetailView: View {
                 ProgressView().frame(maxWidth: .infinity).frame(height: 56)
             } else {
                 VStack(spacing: 6) {
-                    if let dist = viewModel.distanceMeters, !viewModel.radarEligible {
-                        Text(String(format: "You're %.0fm away — get within 500m", dist))
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.orange)
-                    }
-                    
                     Button {
                         Task {
                             let ok = await viewModel.joinRadar(appState: appState)
-                            if ok { showStatusIntent = true }
+                            if ok {
+                                showStatusIntent = true
+                            } else if !viewModel.radarEligible {
+                                showLocationMismatch = true
+                            }
                         }
                     } label: {
                         Text("I'm in the Area")
@@ -963,5 +969,47 @@ private extension Double {
         formatter.numberStyle = .decimal
         formatter.groupingSeparator = ","
         return formatter.string(from: NSNumber(value: self)) ?? "\(Int(self))"
+    }
+}
+
+// MARK: - Location Not Match Sheet
+
+private struct LocationNotMatchSheet: View {
+    let distanceMeters: Double?
+
+    var body: some View {
+        VStack(spacing: 20) {
+            ZStack {
+                Circle()
+                    .fill(Color.red.opacity(0.12))
+                    .frame(width: 80, height: 80)
+                Image(systemName: "location.slash.fill")
+                    .font(.system(size: 34, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 64, height: 64)
+                    .background(Color.red, in: Circle())
+            }
+
+            VStack(spacing: 8) {
+                Text("Location not Match")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(.primary)
+
+                if let dist = distanceMeters {
+                    Text(String(format: "You're %.0fm away. Get within 500m of the event.", dist))
+                        .font(.system(size: 15))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                } else {
+                    Text("You're not quite there yet! Wait until you arrive at the location.")
+                        .font(.system(size: 15))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            .padding(.horizontal, 32)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.top, 32)
     }
 }

@@ -73,9 +73,11 @@ struct PermissionsPrimingView: View {
                         Spacer()
                         
                         VStack(spacing: 16) {
-                            Text("Welcome")
+                            Text("Welcome, \(appState.currentUser?.nickname ?? "")!")
                                 .font(.system(size: 36, weight: .heavy, design: .default))
                                 .foregroundColor(.black)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.6)
                             
                             Text("Your profile is set up, your sensors are online, and your radar is ready to scan. Let's find some events happening near you based on your interest.")
                                 .font(.system(size: 16, weight: .regular))

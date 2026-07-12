@@ -8,16 +8,20 @@ struct RoomView: View {
     @Environment(\.openURL) private var openURL
     @FocusState private var isComposerFocused: Bool
 
+    private let brand = Color(hex: 0xD63200)
+
     var body: some View {
         VStack(spacing: 0) {
             chatHeader
-            Divider().opacity(0.2)
             messageList
             uwbStrip
+        }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea(.all, edges: .bottom))
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             composer
         }
-        .background(Color.peach.opacity(0.1).ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
+        .toolbarBackground(brand, for: .navigationBar)
         .overlay {
             if viewModel.isLoading && viewModel.room == nil {
                 ProgressView()
@@ -51,51 +55,85 @@ struct RoomView: View {
     // MARK: - Header
 
     private var chatHeader: some View {
-        HStack(alignment: .center) {
-            Button { router.pop() } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(Color.terracotta)
-                    .frame(width: 44, height: 44)
+        ZStack(alignment: .bottom) {
+            // Background extends behind status bar
+            ZStack {
+                brand
+                GeometryReader { geo in
+                    let w = geo.size.width
+                    let h = geo.size.height
+                    Path { path in
+                        path.move(to: CGPoint(x: w * 0.25, y: h))
+                        path.addQuadCurve(
+                            to: CGPoint(x: w + 10, y: h * 0.28),
+                            control: CGPoint(x: w * 0.75, y: h * 1.05)
+                        )
+                        path.addLine(to: CGPoint(x: w + 10, y: h * 0.52))
+                        path.addQuadCurve(
+                            to: CGPoint(x: w * 0.25, y: h),
+                            control: CGPoint(x: w * 0.75, y: h * 1.28)
+                        )
+                        path.closeSubpath()
+                    }
+                    .fill(Color(red: 0.62, green: 0.12, blue: 0.0).opacity(0.75))
+                }
             }
+            .clipShape(UnevenRoundedRectangle(
+                topLeadingRadius: 0, bottomLeadingRadius: 30,
+                bottomTrailingRadius: 30, topTrailingRadius: 0
+            ))
+            .ignoresSafeArea(edges: .top)
 
-            Spacer()
+            // Content sits at the bottom of the header, below safe area
+            HStack(spacing: 12) {
+                Button { router.pop() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(brand)
+                        .frame(width: 48, height: 48)
+                        .background(Color(red: 1, green: 0.88, blue: 0.84), in: Circle())
+                }
 
-            VStack(spacing: 4) {
                 if let urlStr = viewModel.room?.peerPhotoURL, let url = URL(string: urlStr) {
                     AsyncImage(url: url) { img in
                         img.resizable().scaledToFill()
                     } placeholder: {
                         chatAvatarPlaceholder
                     }
-                    .frame(width: 52, height: 52)
+                    .frame(width: 44, height: 44)
                     .clipShape(Circle())
                 } else {
                     chatAvatarPlaceholder
                 }
-                Text(viewModel.room?.peerNickname ?? "")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.primary)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(viewModel.room?.peerNickname ?? "")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    Text("Online")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.white.opacity(0.75))
+                }
+
+                Spacer()
             }
-
-            Spacer()
-
-            Color.clear.frame(width: 44, height: 44)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 20)
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 4)
-        .padding(.bottom, 8)
+        .frame(height: 88)
+        .shadow(color: brand.opacity(0.35), radius: 10, y: 5)
     }
 
     private var chatAvatarPlaceholder: some View {
-        Circle()
-            .fill(Color.coral.opacity(0.25))
-            .frame(width: 52, height: 52)
-            .overlay {
-                Text(String(viewModel.room?.peerNickname.prefix(1) ?? "?").uppercased())
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(Color.terracotta)
-            }
+        ZStack {
+            Circle()
+                .fill(Color.white.opacity(0.3))
+                .frame(width: 44, height: 44)
+            Text(String(viewModel.room?.peerNickname.prefix(1) ?? "?").uppercased())
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.white)
+        }
     }
 
     // MARK: - Message list
@@ -137,33 +175,38 @@ struct RoomView: View {
         let time = msg.timestamp.formatted(date: .omitted, time: .shortened)
 
         if isMine {
-            HStack(alignment: .bottom, spacing: 6) {
+            // Outgoing — bubble on right, time on right below
+            HStack(alignment: .bottom, spacing: 0) {
                 Spacer(minLength: 60)
-                Text(time)
-                    .font(.system(size: 10))
-                    .foregroundStyle(Color(.tertiaryLabel))
-                Text(msg.message)
-                    .font(.system(size: 15))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .background(Color.coral,
-                                in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            }
-        } else {
-            HStack(alignment: .bottom, spacing: 6) {
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .trailing, spacing: 3) {
                     Text(msg.message)
                         .font(.system(size: 15))
-                        .foregroundStyle(Color.terracotta)
+                        .foregroundStyle(.white)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 9)
-                        .background(Color(.systemGray6),
+                        .background(Color.coral,
                                     in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                     Text(time)
                         .font(.system(size: 10))
                         .foregroundStyle(Color(.tertiaryLabel))
-                        .padding(.leading, 6)
+                        .padding(.trailing, 4)
+                }
+            }
+        } else {
+            // Incoming — bubble on left, time on left below
+            HStack(alignment: .bottom, spacing: 0) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(msg.message)
+                        .font(.system(size: 15))
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .background(Color(.systemBackground),
+                                    in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    Text(time)
+                        .font(.system(size: 10))
+                        .foregroundStyle(Color(.tertiaryLabel))
+                        .padding(.leading, 4)
                 }
                 Spacer(minLength: 60)
             }
@@ -217,33 +260,34 @@ struct RoomView: View {
     // MARK: - Composer
 
     private var composer: some View {
-        HStack(spacing: 14) {
-            TextField("chat something brother", text: $viewModel.draft, axis: .vertical)
+        let isEmpty = viewModel.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+
+        return HStack(spacing: 10) {
+            TextField("Chat something...", text: $viewModel.draft, axis: .vertical)
                 .font(.system(size: 15))
                 .lineLimit(1...5)
                 .focused($isComposerFocused)
-
-            Button { } label: {
-                Image(systemName: "mic")
-                    .font(.system(size: 18))
-                    .foregroundStyle(Color(.tertiaryLabel))
-            }
 
             Button {
                 Task { await viewModel.send() }
             } label: {
                 Image(systemName: "paperplane.fill")
-                    .font(.system(size: 18))
-                    .foregroundStyle(viewModel.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                                     ? Color(.tertiaryLabel) : Color.coral)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 36, height: 36)
+                    .background(isEmpty ? Color(.systemGray3) : brand, in: Circle())
                     .rotationEffect(.degrees(45))
             }
-            .disabled(viewModel.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .disabled(isEmpty)
+            .animation(.easeInOut(duration: 0.15), value: isEmpty)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(Color(.systemBackground).shadow(.drop(radius: 0, y: -0.5)))
-        .overlay(alignment: .top) { Divider().opacity(0.15) }
+        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .shadow(color: .black.opacity(0.1), radius: 12, y: 4)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Color(.systemGroupedBackground))
     }
 }
 

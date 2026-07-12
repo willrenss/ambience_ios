@@ -131,10 +131,10 @@ struct ProfileView: View {
                 }
                 .disabled(viewModel?.isLoading == true)
 
-                Spacer(minLength: Spacing.xxl)
             }
             .padding(.horizontal, Spacing.lg)
             .padding(.top, Spacing.md)
+            .padding(.bottom, 100)
         }
         .background(Color.peach.opacity(0.15).ignoresSafeArea())
         .navigationTitle("Profile")
@@ -330,12 +330,19 @@ private struct InterestsPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selected: Set<String> = []
     @State private var isSaving = false
+    @State private var searchText = ""
+
+    private var filtered: [Interest] {
+        searchText.trimmingCharacters(in: .whitespaces).isEmpty
+            ? viewModel.allInterests
+            : viewModel.allInterests.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 FlowLayout(spacing: 10) {
-                    ForEach(viewModel.allInterests) { interest in
+                    ForEach(filtered) { interest in
                         let isOn = selected.contains(interest.name)
                         Button {
                             if isOn { selected.remove(interest.name) }
@@ -356,6 +363,7 @@ private struct InterestsPickerSheet: View {
                 }
                 .padding(Spacing.lg)
             }
+            .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search interests...")
             .navigationTitle("Interests")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

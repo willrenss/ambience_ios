@@ -17,8 +17,9 @@ struct EventMapView: View {
     )
     @Environment(AppState.self) private var appState
 
-    private let teal = Color(hex: 0x1E7082)
-    
+    private let teal  = Color(hex: 0x1E7082)
+    private let brand = Color(hex: 0xD63200)
+
     var body: some View {
         @Bindable var viewModel = viewModel
         @Bindable var appState = appState
@@ -35,6 +36,7 @@ struct EventMapView: View {
                     )) {
                         EventMapPin(
                             event: event,
+                            isSelected: previewEvent?.id == event.id || appState.activeEvent?.id == event.id,
                             isActive: appState.activeEvent?.id == event.id
                         )
                         .onTapGesture {
@@ -242,7 +244,7 @@ struct EventMapView: View {
                     if let cat = event.category {
                         Text(cat)
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(teal)
+                            .foregroundStyle(brand)
                     }
                     Text(event.name)
                         .font(.system(size: 17, weight: .bold))
@@ -265,7 +267,7 @@ struct EventMapView: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, Spacing.sm)
                             .padding(.vertical, 4)
-                            .background(teal, in: Capsule())
+                            .background(brand, in: Capsule())
                         } else {
                             SearchPriceBadge(event: event)
                         }
@@ -284,7 +286,7 @@ struct EventMapView: View {
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundStyle(.white)
                                     .frame(width: 28, height: 28)
-                                    .background(teal, in: Circle())
+                                    .background(brand, in: Circle())
                                     .overlay(Circle().stroke(.white, lineWidth: 2))
                             }
                         }
@@ -395,34 +397,47 @@ private struct RadarHost: View {
 
 private struct EventMapPin: View {
     let event: EventDTO
+    var isSelected: Bool = false
     var isActive: Bool = false
-    
+
     private let teal = Color(hex: 0x1E7082)
-    
+
     var body: some View {
         VStack(spacing: 4) {
             ZStack {
-                // Outer ring for active event
-                if isActive {
+                // Outer pulse ring when selected or active
+                if isSelected {
                     Circle()
-                        .stroke(Color.coral.opacity(0.35), lineWidth: 3)
-                        .frame(width: 60, height: 60)
+                        .stroke(Color.coral.opacity(0.3), lineWidth: 4)
+                        .frame(width: 62, height: 62)
                 }
+
+                // Gradient fill — merah saat di-tap/selected, teal saat normal
                 Circle()
-                    .fill(isActive ? Color.coral : teal)
+                    .fill(
+                        LinearGradient(
+                            colors: isSelected
+                                ? [Color.coral, Color(red: 0.72, green: 0.14, blue: 0.14)]
+                                : [teal, Color(hex: 0x134F5C)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
                     .frame(width: 48, height: 48)
-                    .shadow(color: .black.opacity(0.22), radius: 6, y: 3)
-                
+                    .overlay(Circle().stroke(.white, lineWidth: 2.5))
+                    .shadow(color: (isSelected ? Color.coral : teal).opacity(0.4), radius: 8, y: 4)
+
                 Image(systemName: isActive ? "checkmark" : categoryIcon)
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(.white)
             }
-            
+
             Text(event.name)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
         }
+        .animation(.easeInOut(duration: 0.2), value: isSelected)
     }
     
     private var categoryIcon: String {
@@ -659,7 +674,7 @@ private struct SearchPriceBadge: View {
             .font(.labelSmall).foregroundStyle(.white)
             .lineLimit(1).minimumScaleFactor(0.8)
             .padding(.horizontal, Spacing.sm).padding(.vertical, 4)
-            .background(Color(hex: 0x1E7082), in: Capsule())
+            .background(Color(hex: 0xD63200), in: Capsule())
     }
     
     private var label: String {

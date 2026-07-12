@@ -25,7 +25,7 @@ struct BackTapSetupView: View {
         (
             "list.bullet",
             "Select Shortcut",
-            "Scroll to the Shortcuts section at the bottom and choose Search Nearby (Ambient Social)."
+            "Scroll to the Shortcuts section at the bottom and choose Search Nearby (Nowi)."
         ),
         (
             "checkmark.circle",
@@ -38,7 +38,7 @@ struct BackTapSetupView: View {
         List {
             Section {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Back Tap lets you trigger Ambient Social's nearby scan by tapping the back of your iPhone.")
+                    Text("Back Tap lets you trigger Nowi's nearby scan by tapping the back of your iPhone.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
