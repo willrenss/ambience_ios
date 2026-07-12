@@ -12,7 +12,18 @@ struct NearbyUser: Sendable, Identifiable, Equatable {
     var direction: Float?     // bearing radians relative to device heading; nil = unknown
     var hasRealPosition: Bool = true   // false = peer GPS not received yet
 
-    var displayLabel: String { "\(nickname), \(age)" }
+    static func generation(for age: Int) -> String {
+        switch age {
+        case ..<14:   return "Gen Alpha"
+        case 14..<30: return "Gen Z"
+        case 30..<46: return "Gen Y"
+        case 46..<62: return "Gen X"
+        default:      return "Boomer"
+        }
+    }
+
+    var generation: String { NearbyUser.generation(for: age) }
+    var displayLabel: String { "\(nickname), \(generation)" }
 
     var distanceLabel: String {
         guard hasRealPosition, distance > 0 else { return "Locating…" }

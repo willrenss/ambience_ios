@@ -175,40 +175,34 @@ struct RoomView: View {
         let time = msg.timestamp.formatted(date: .omitted, time: .shortened)
 
         if isMine {
-            // Outgoing — bubble on right, time on right below
-            HStack(alignment: .bottom, spacing: 0) {
-                Spacer(minLength: 60)
-                VStack(alignment: .trailing, spacing: 3) {
-                    Text(msg.message)
-                        .font(.system(size: 15))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 9)
-                        .background(Color.coral,
-                                    in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    Text(time)
-                        .font(.system(size: 10))
-                        .foregroundStyle(Color(.tertiaryLabel))
-                        .padding(.trailing, 4)
-                }
+            // Outgoing — bubble on right, time beside on the left
+            HStack(alignment: .bottom, spacing: 5) {
+                Spacer(minLength: 40)
+                Text(time)
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color(.tertiaryLabel))
+                Text(msg.message)
+                    .font(.system(size: 15))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                    .background(Color(hex: 0x336F7A),
+                                in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
         } else {
-            // Incoming — bubble on left, time on left below
-            HStack(alignment: .bottom, spacing: 0) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(msg.message)
-                        .font(.system(size: 15))
-                        .foregroundStyle(.primary)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 9)
-                        .background(Color(.systemBackground),
-                                    in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    Text(time)
-                        .font(.system(size: 10))
-                        .foregroundStyle(Color(.tertiaryLabel))
-                        .padding(.leading, 4)
-                }
-                Spacer(minLength: 60)
+            // Incoming — bubble on left, time beside on the right
+            HStack(alignment: .bottom, spacing: 5) {
+                Text(msg.message)
+                    .font(.system(size: 15))
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                    .background(Color(.systemBackground),
+                                in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                Text(time)
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color(.tertiaryLabel))
+                Spacer(minLength: 40)
             }
         }
     }
