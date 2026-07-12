@@ -197,10 +197,13 @@ struct PermissionsPrimingView: View {
                 // Panggil advance() di luar Task agar halaman langsung pindah secara instan
                 Button(action: {
                     advance()
-                    
+
                     // Request izin notifikasi berjalan di background
                     Task {
-                        _ = await NotificationPermissionPrimer.request()
+                        let granted = await NotificationPermissionPrimer.request()
+                        if granted {
+                            await MainActor.run { UIApplication.shared.registerForRemoteNotifications() }
+                        }
                     }
                 }) {
                     Text("Enable Notifications")

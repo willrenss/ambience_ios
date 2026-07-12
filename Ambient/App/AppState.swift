@@ -53,6 +53,11 @@ final class AppState: @unchecked Sendable {
     // Set by StatusIntentView — HomeView observes and auto-connects to radar.
     var shouldAutoConnectRadar: Bool = false
 
+    // The room currently on screen, if any — set/cleared by RoomView. Lets a
+    // foreground push notification for that same room suppress its own banner
+    // instead of interrupting a chat the user is already looking at.
+    var openRoomID: UUID? = nil
+
     // The radar blip currently focused (used as the Back Tap ping target).
     var focusTargetUserID: UUID? {
         didSet {

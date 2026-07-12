@@ -36,6 +36,7 @@ struct RoomView: View {
             // below then pin the watermark to the newest message (server clock) so it
             // survives clock skew and covers messages that arrive while we're reading.
             appState.markRoomSeen(roomID: roomID, upTo: Date())
+            appState.openRoomID = roomID
         }
         .onChange(of: viewModel.messages.last?.timestamp) { _, latest in
             if let latest { appState.markRoomSeen(roomID: roomID, upTo: latest) }
@@ -44,6 +45,7 @@ struct RoomView: View {
             if let latest = viewModel.messages.last?.timestamp {
                 appState.markRoomSeen(roomID: roomID, upTo: latest)
             }
+            if appState.openRoomID == roomID { appState.openRoomID = nil }
             viewModel.cleanup()
         }
     }

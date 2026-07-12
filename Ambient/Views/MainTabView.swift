@@ -49,6 +49,11 @@ struct MainTabView: View {
         .onChange(of: appState.activeEvent == nil) { _, _ in
             mapsRouter.popToRoot()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .pushNotificationOpenRoom)) { note in
+            guard let roomID = note.object as? UUID else { return }
+            appState.selectedTab = .bookmarks
+            bookmarksRouter.push(roomID)
+        }
         .task {
             // Trigger NISession creation as soon as the main screen is visible.
             // This makes "Nearby Interactions" appear in iOS Settings and pre-warms
