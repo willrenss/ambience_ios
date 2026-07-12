@@ -4,7 +4,7 @@ import SwiftUI
 struct PermissionsPrimingView: View {
     @Environment(AppState.self) private var appState
     @State private var step: Int = 0
-    private let stepCount = 4 // Diubah menjadi 4 untuk mengakomodasi halaman Welcome
+    private let stepCount = 3
     
     // Theme Colors
     let tealButton = Color(red: 0.22, green: 0.44, blue: 0.47)
@@ -16,8 +16,8 @@ struct PermissionsPrimingView: View {
             ZStack {
                 Color.white.ignoresSafeArea()
                 
-                // MARK: - Green Hill Background (Khusus Halaman 4 / Welcome)
-                if step == 3 {
+                // MARK: - Green Hill Background (Khusus Halaman Welcome)
+                if step == 2 {
                     VStack {
                         Spacer()
                         Ellipse()
@@ -51,8 +51,8 @@ struct PermissionsPrimingView: View {
                     .padding(.horizontal, 24)
                     .padding(.top, 10)
                     
-                    if step < 3 {
-                        // MARK: - Title (Halaman 1 - 3)
+                    if step < 2 {
+                        // MARK: - Title (Halaman 1 - 2)
                         Text(title)
                             .font(.system(size: 50, weight: .black, design: .default))
                             .multilineTextAlignment(.center)
@@ -69,7 +69,7 @@ struct PermissionsPrimingView: View {
                         
                         Spacer()
                     } else {
-                        // MARK: - Welcome Content (Halaman 4)
+                        // MARK: - Welcome Content (Halaman 3)
                         Spacer()
                         
                         VStack(spacing: 16) {
@@ -195,27 +195,8 @@ struct PermissionsPrimingView: View {
                         .secondaryButtonStyle(color: tealButton)
                 }
                 
-            case 2:
-                // Panggil advance() di luar Task agar halaman langsung pindah secara instan
-                Button(action: {
-                    advance()
-                    
-                    // Request izin notifikasi berjalan di background
-                    Task {
-                        _ = await NotificationPermissionPrimer.request()
-                    }
-                }) {
-                    Text("Enable Notifications")
-                        .primaryButtonStyle(bg: tealButton)
-                }
-                
-                Button(action: { advance() }) {
-                    Text("Maybe Later")
-                        .secondaryButtonStyle(color: tealButton)
-                }
-                
             default:
-                // Halaman Welcome (Step 3) - Barulah panggil `finish()` untuk masuk ke app
+                // Halaman Welcome (Step 2) - panggil `finish()` untuk masuk ke app
                 Button(action: { finish() }) {
                     Text("Let's Explore Map")
                         .primaryButtonStyle(bg: tealButton)

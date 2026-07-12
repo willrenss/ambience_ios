@@ -145,20 +145,20 @@ private struct NameStep: View {
                 Spacer()
                 Ellipse()
                     .fill(darkOrange)
-                    .frame(width: UIScreen.main.bounds.width * 1, height: 350)
+                    .frame(maxWidth: .infinity, minHeight: 350, maxHeight: 350)
                     .offset(y: 150)
             }
             .ignoresSafeArea()
             
             // MARK: - Main Content
             VStack(alignment: .leading, spacing: 0) {
-                
+
                 // Typography Section
                 VStack(alignment: .leading, spacing: -5) {
                     Text("Lets")
                         .font(.system(size: 54, weight: .black, design: .default))
                         .foregroundColor(darkOrange)
-                    
+
                     Text("Get to\nKnow Each\nOther!")
                         .font(.system(size: 54, weight: .black, design: .default))
                         .foregroundColor(.white)
@@ -249,6 +249,7 @@ private struct NameStep: View {
             }
             .padding(.horizontal, 32)
         }
+        .onTapGesture { focused = false }
     }
 }
 
@@ -661,6 +662,7 @@ private struct HometownStep: View {
                     .padding(.bottom, max(geo.safeAreaInsets.bottom, 24))
                 }
             }
+            .onTapGesture { focused = false }
         }
         .ignoresSafeArea(edges: .bottom)
         .background(Color.white)
@@ -758,6 +760,7 @@ struct TowerShape: Shape {
 
 private struct InterestsStep: View {
     @Bindable var vm: OnboardingViewModel
+    @FocusState private var searchFocused: Bool
 
     var body: some View {
         GeometryReader { geo in
@@ -789,6 +792,7 @@ private struct InterestsStep: View {
                         .foregroundStyle(.secondary)
                     TextField("Search interests...", text: $vm.searchText)
                         .font(.system(size: 15))
+                        .focused($searchFocused)
                         .autocorrectionDisabled()
                     if !vm.searchText.isEmpty {
                         Button { vm.searchText = "" } label: {
@@ -817,6 +821,7 @@ private struct InterestsStep: View {
                     .padding(.horizontal, 24)
                     .padding(.bottom, 16)
                 }
+                .scrollDismissesKeyboard(.interactively)
 
                 if let error = vm.errorMessage {
                     Text(error).font(.caption).foregroundStyle(Color.errorRed)
@@ -831,6 +836,7 @@ private struct InterestsStep: View {
                 )
                 .padding(.horizontal, 28)
             }
+            .onTapGesture { searchFocused = false }
         }
         .ignoresSafeArea(edges: .bottom)
         .background(.white)

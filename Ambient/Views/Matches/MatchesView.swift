@@ -243,8 +243,7 @@ private struct MatchRow: View {
 
 #Preview {
     let now = Date()
-    let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: now)!
-    let tuesday  = Calendar.current.date(byAdding: .day, value: -2, to: now)!
+    let tuesday = Calendar.current.date(byAdding: .day, value: -2, to: now)!
 
     let mockRooms: [RoomDTO] = [
         RoomDTO(id: UUID(), codeRoom: "R1", peerUserID: UUID(), peerNickname: "Acing",

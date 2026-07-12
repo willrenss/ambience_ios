@@ -29,7 +29,7 @@ struct EventMapView: View {
             // Full-screen map
             Map(position: $cameraPosition) {
                 UserAnnotation()
-                ForEach(viewModel.trending) { event in
+                ForEach(viewModel.mapTrending) { event in
                     Annotation("", coordinate: CLLocationCoordinate2D(
                         latitude: event.latitude,
                         longitude: event.longitude
@@ -87,9 +87,30 @@ struct EventMapView: View {
                 // ── Category chips ──────────────────────────────────────────
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: Spacing.sm) {
+                        // Heart — bookmark filter (separate endpoint, independent of search)
+                        Button {
+                            viewModel.toggleMapBookmark()
+                        } label: {
+                            ZStack {
+                                if viewModel.isMapBookmarkLoading {
+                                    ProgressView()
+                                        .scaleEffect(0.7)
+                                        .tint(viewModel.mapBookmarkActive ? .white : teal)
+                                } else {
+                                    Image(systemName: viewModel.mapBookmarkActive ? "heart.fill" : "heart")
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundStyle(viewModel.mapBookmarkActive ? .white : teal)
+                                }
+                            }
+                            .frame(width: 36, height: 36)
+                            .background(viewModel.mapBookmarkActive ? teal : Color.white, in: Circle())
+                            .shadow(color: .black.opacity(0.07), radius: 4, y: 1)
+                        }
+
                         ForEach(EventsViewModel.categories, id: \.self) { cat in
                             Button {
                                 viewModel.selectedCategory = viewModel.selectedCategory == cat ? nil : cat
+                                if viewModel.selectedCategory != nil { viewModel.mapBookmarkActive = false }
                             } label: {
                                 Text(cat)
                                     .font(.system(size: 14, weight: .medium))
@@ -568,12 +589,15 @@ struct EventSearchCover: View {
     private var categoryChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Spacing.sm) {
-                Button { viewModel.selectedCategory = nil } label: {
-                    Image(systemName: viewModel.selectedCategory == nil ? "heart.fill" : "heart")
-                        .foregroundStyle(viewModel.selectedCategory == nil ? .white : teal)
+                Button {
+                    viewModel.showBookmarkedOnly.toggle()
+                    if viewModel.showBookmarkedOnly { viewModel.selectedCategory = nil }
+                } label: {
+                    Image(systemName: viewModel.showBookmarkedOnly ? "heart.fill" : "heart")
+                        .foregroundStyle(viewModel.showBookmarkedOnly ? .white : teal)
                         .frame(width: 36, height: 36)
                         .background(
-                            viewModel.selectedCategory == nil ? teal : Color.white.opacity(0.7),
+                            viewModel.showBookmarkedOnly ? teal : Color.white.opacity(0.7),
                             in: Circle()
                         )
                 }
@@ -583,7 +607,10 @@ struct EventSearchCover: View {
                     .frame(width: 36, height: 36)
                     .background(Color.white.opacity(0.7), in: Circle())
                 ForEach(EventsViewModel.categories, id: \.self) { cat in
-                    Button { viewModel.selectedCategory = cat } label: {
+                    Button {
+                        viewModel.selectedCategory = viewModel.selectedCategory == cat ? nil : cat
+                        if viewModel.selectedCategory != nil { viewModel.showBookmarkedOnly = false }
+                    } label: {
                         Text(cat)
                             .font(.labelLarge)
                             .foregroundStyle(viewModel.selectedCategory == cat ? .white : teal)

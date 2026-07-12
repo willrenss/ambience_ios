@@ -106,38 +106,31 @@ struct HomeView: View {
 
     // MARK: - Header
 
-    private var iconBg: Color {
-        viewModel.isConnected ? .white : Color.white.opacity(0.18)
-    }
-    private var iconFg: Color {
-        viewModel.isConnected ? Color.terracotta : .white
-    }
-
     private var header: some View {
         VStack(spacing: Spacing.sm) {
             HStack {
-                // Back
+                // Back — HIG style, black icon
                 Button { onDismiss?() ?? dismiss() } label: {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(iconFg)
-                        .frame(width: 40, height: 40)
-                        .background(iconBg, in: Circle())
-                        .shadow(color: .black.opacity(viewModel.isConnected ? 0.08 : 0), radius: 6, y: 2)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(Color.primary)
+                        .frame(width: 44, height: 44)
+                        .background(Color(.systemBackground).opacity(0.92), in: Circle())
+                        .shadow(color: .black.opacity(0.1), radius: 6, y: 2)
                 }
 
                 Spacer()
 
-                // Right: bell + checkout
+                // Right: bell + checkout — HIG style, black icons
                 HStack(spacing: Spacing.sm) {
                     Button { showNotificationLog = true } label: {
                         ZStack(alignment: .topTrailing) {
                             Image(systemName: "bell")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(iconFg)
-                                .frame(width: 40, height: 40)
-                                .background(iconBg, in: Circle())
-                                .shadow(color: .black.opacity(viewModel.isConnected ? 0.08 : 0), radius: 6, y: 2)
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(Color.primary)
+                                .frame(width: 44, height: 44)
+                                .background(Color(.systemBackground).opacity(0.92), in: Circle())
+                                .shadow(color: .black.opacity(0.1), radius: 6, y: 2)
                             if !viewModel.receivedPings.isEmpty || !viewModel.recentMatches.isEmpty {
                                 Circle()
                                     .fill(Color.coral)
@@ -149,11 +142,11 @@ struct HomeView: View {
 
                     Button { Task { await checkout() } } label: {
                         Image(systemName: "rectangle.portrait.and.arrow.right")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(iconFg)
-                            .frame(width: 40, height: 40)
-                            .background(iconBg, in: Circle())
-                            .shadow(color: .black.opacity(viewModel.isConnected ? 0.08 : 0), radius: 6, y: 2)
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(Color.primary)
+                            .frame(width: 44, height: 44)
+                            .background(Color(.systemBackground).opacity(0.92), in: Circle())
+                            .shadow(color: .black.opacity(0.1), radius: 6, y: 2)
                     }
                 }
             }

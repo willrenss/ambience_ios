@@ -13,9 +13,10 @@ struct OnboardingRadarView: View {
     var onNext: () -> Void = {}
     
     var body: some View {
+        GeometryReader { geo in
         VStack(spacing: 0) {
             RadarIllustrationView()
-                .frame(height: UIScreen.main.bounds.height * 0.58)
+                .frame(height: geo.size.height * 0.58)
                 .clipShape(RoundedRectangle(cornerRadius: 60, style: .continuous))
                 .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 5)
                 .ignoresSafeArea(.all, edges: .top)
@@ -70,6 +71,7 @@ struct OnboardingRadarView: View {
             }
             .padding(.horizontal, 32)
             .padding(.top, -33)
+        }
         }
     }
 }

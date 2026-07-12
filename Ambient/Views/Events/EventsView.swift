@@ -6,10 +6,17 @@ final class EventsViewModel {
     var events: [EventDTO] = []
     var searchText: String = ""
     var selectedCategory: String? = nil
-    // Heart chip — filters "Trending Events" to bookmarked only; mutually exclusive with selectedCategory.
+    // Heart chip for SEARCH/BROWSE view — client-side filter, independent of map.
     var showBookmarkedOnly: Bool = false
     var isLoading: Bool = false
     var errorMessage: String? = nil
+
+    // ── Map bookmark filter ─────────────────────────────────────────────────
+    // Completely separate from showBookmarkedOnly: uses a dedicated server endpoint
+    // so toggling heart on the map doesn't affect the search view and vice versa.
+    var mapBookmarkActive: Bool = false
+    var mapBookmarkedEvents: [EventDTO] = []
+    var isMapBookmarkLoading: Bool = false
 
     // Disesuaikan urutannya agar sama persis dengan screenshot
     static let categories = ["Exhibitions", "Festivals", "Communities", "Concerts"]
@@ -18,10 +25,40 @@ final class EventsViewModel {
         Array(events.prefix(3))
     }
 
+    // Used by EventsView/EventSearchCover — client-side bookmark filter.
     var trending: [EventDTO] {
         if showBookmarkedOnly { return events.filter { $0.isBookmarked } }
         guard let selectedCategory else { return events }
         return events.filter { $0.category == selectedCategory }
+    }
+
+    // Used ONLY by EventMapView — server-fetched bookmark filter, separate endpoint.
+    var mapTrending: [EventDTO] {
+        if mapBookmarkActive { return mapBookmarkedEvents }
+        guard let selectedCategory else { return events }
+        return events.filter { $0.category == selectedCategory }
+    }
+
+    // Synchronous toggle — UI reacts immediately; fetch happens in background.
+    func toggleMapBookmark() {
+        mapBookmarkActive.toggle()
+        if mapBookmarkActive {
+            selectedCategory = nil
+            Task { await fetchMapBookmarks() }
+        } else {
+            mapBookmarkedEvents = []
+        }
+    }
+
+    private func fetchMapBookmarks() async {
+        isMapBookmarkLoading = true
+        defer { isMapBookmarkLoading = false }
+        do {
+            mapBookmarkedEvents = try await EventService.shared.fetchBookmarkedEvents()
+        } catch {
+            mapBookmarkedEvents = []
+            // mapBookmarkActive stays true — user sees empty filter, not silent reset
+        }
     }
 
     var searchResults: [EventDTO] {

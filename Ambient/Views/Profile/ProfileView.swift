@@ -136,6 +136,7 @@ struct ProfileView: View {
             .padding(.top, Spacing.md)
             .padding(.bottom, 100)
         }
+        .scrollDismissesKeyboard(.interactively)
         .background(Color.peach.opacity(0.15).ignoresSafeArea())
         .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)

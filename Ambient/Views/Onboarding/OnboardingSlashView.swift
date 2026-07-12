@@ -9,12 +9,17 @@ import SwiftUI
 
 struct OnboardingSplashView: View {
     var body: some View {
-        ZStack {
-            Color(hex: 0xFAF5EF).ignoresSafeArea()
-            Text("NOWI")
-                .font(.custom("PlusJakartaSans-Bold", size: 52))
-                .foregroundStyle(Color.primary)
-                .kerning(6)
+        GeometryReader { geo in
+            ZStack {
+                Color(red: 0.839, green: 0.196, blue: 0.0)
+                    .ignoresSafeArea()
+                Image("splashscreen")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: geo.size.width * 0.55)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .ignoresSafeArea()
     }
 }
