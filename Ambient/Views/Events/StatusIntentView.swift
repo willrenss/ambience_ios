@@ -6,6 +6,9 @@ struct StatusIntentView: View {
     @State private var statusText = ""
     @State private var isBusy = false
     @FocusState private var focused: Bool
+    // Remembers the last submitted context so returning users can reuse it at
+    // their next check-in instead of retyping every time.
+    @AppStorage("statusIntentLastContext") private var savedContext = ""
 
     var onGetIntoRadar: (String) async -> Void
 
@@ -80,6 +83,7 @@ struct StatusIntentView: View {
                 isBusy = true
                 Task {
                     await onGetIntoRadar(trimmed)
+                    savedContext = trimmed
                     isBusy = false
                     dismiss()
                 }
@@ -108,6 +112,13 @@ struct StatusIntentView: View {
             .padding(.bottom, 8)
         }
         .onTapGesture { focused = false }
+        .onAppear {
+            // Prefill from the last saved context so returning users can hit
+            // Continue immediately; first-ever check-in still starts blank.
+            if statusText.isEmpty {
+                statusText = savedContext
+            }
+        }
     }
 }
 

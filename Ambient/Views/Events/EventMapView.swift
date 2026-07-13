@@ -15,10 +15,18 @@ struct EventMapView: View {
             span: MKCoordinateSpan(latitudeDelta: 0.12, longitudeDelta: 0.12)
         )
     )
+    // Tracks current zoom via the map's live span — drives pin-label visibility below.
+    @State private var currentSpanDelta: Double = 0.12
     @Environment(AppState.self) private var appState
 
     private let teal  = Color(hex: 0x1E7082)
+    // Distinct from `teal` (used by the recenter button) — filter pills use this shade when selected.
+    private let filterSelected = Color(hex: 0x4FA0B0)
     private let brand = Color(hex: 0xD63200)
+
+    // Past this zoomed-out threshold, pin names are hidden (Apple Maps-style) so
+    // labels don't visually stack when many pins are close together. Tune freely.
+    private var pinLabelsVisible: Bool { currentSpanDelta < 0.3 }
 
     var body: some View {
         @Bindable var viewModel = viewModel
@@ -33,11 +41,12 @@ struct EventMapView: View {
                     Annotation("", coordinate: CLLocationCoordinate2D(
                         latitude: event.latitude,
                         longitude: event.longitude
-                    )) {
+                    ), anchor: .bottom) {
                         EventMapPin(
                             event: event,
                             isSelected: previewEvent?.id == event.id || appState.activeEvent?.id == event.id,
-                            isActive: appState.activeEvent?.id == event.id
+                            isActive: appState.activeEvent?.id == event.id,
+                            showLabel: pinLabelsVisible
                         )
                         .onTapGesture {
                             if appState.activeEvent?.id == event.id {
@@ -55,6 +64,9 @@ struct EventMapView: View {
             .mapControls { }
             .ignoresSafeArea()
             .onTapGesture { previewEvent = nil }
+            .onMapCameraChange(frequency: .continuous) { context in
+                currentSpanDelta = context.region.span.latitudeDelta
+            }
             
             VStack(spacing: 0) {
                 // ── Search bar ─────────────────────────────────────────────
@@ -65,17 +77,19 @@ struct EventMapView: View {
                 } label: {
                     HStack(spacing: Spacing.sm) {
                         Image(systemName: "magnifyingglass")
+                            .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(.secondary)
                         Text("Search on Map")
-                            .font(.bodyMedium)
+                            .font(.system(size: 16))
                             .foregroundStyle(.secondary)
                         Spacer()
                         Image(systemName: "mic.fill")
+                            .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(.secondary)
                     }
-                    .padding(.horizontal, Spacing.md)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, Spacing.lg)
                     .frame(maxWidth: .infinity)
+                    .frame(height: 46)
                     .background(.white, in: RoundedRectangle(cornerRadius: 60, style: .continuous))
                     .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
                 }
@@ -92,10 +106,13 @@ struct EventMapView: View {
                             viewModel.toggleMapBookmark()
                         } label: {
                             Image(systemName: viewModel.mapBookmarkActive ? "heart.fill" : "heart")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(viewModel.mapBookmarkActive ? .white : teal)
-                                .frame(width: 36, height: 36)
-                                .background(viewModel.mapBookmarkActive ? teal : Color.white, in: Circle())
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(viewModel.mapBookmarkActive ? .white : .primary)
+                                .frame(width: 38, height: 38)
+                                .background(viewModel.mapBookmarkActive ? filterSelected : Color.white, in: Circle())
+                                .overlay(
+                                    Circle().stroke(Color(white: 0.9), lineWidth: viewModel.mapBookmarkActive ? 0 : 1)
+                                )
                                 .shadow(color: .black.opacity(0.07), radius: 4, y: 1)
                         }
 
@@ -107,11 +124,14 @@ struct EventMapView: View {
                                 Text(cat)
                                     .font(.system(size: 14, weight: .medium))
                                     .foregroundStyle(viewModel.selectedCategory == cat ? .white : .primary)
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 8)
+                                    .padding(.horizontal, 18)
+                                    .padding(.vertical, 10)
                                     .background(
-                                        viewModel.selectedCategory == cat ? teal : Color.white,
+                                        viewModel.selectedCategory == cat ? filterSelected : Color.white,
                                         in: Capsule()
+                                    )
+                                    .overlay(
+                                        Capsule().stroke(Color(white: 0.9), lineWidth: viewModel.selectedCategory == cat ? 0 : 1)
                                     )
                                     .shadow(color: .black.opacity(0.07), radius: 4, y: 1)
                             }
@@ -120,7 +140,7 @@ struct EventMapView: View {
                     .padding(.horizontal, Spacing.lg)
                 }
                 .background(Color.white.opacity(0.001))
-                .padding(.top, Spacing.sm)
+                .padding(.top, Spacing.lg)
                 
                 Spacer()
 
@@ -142,7 +162,7 @@ struct EventMapView: View {
                             }
                         }
                     } label: {
-                        Image(systemName: "location.north.fill")
+                        Image(systemName: "location.fill")
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(.white)
                             .frame(width: 52, height: 52)
@@ -255,7 +275,7 @@ struct EventMapView: View {
                 // Info
                 VStack(alignment: .leading, spacing: 4) {
                     if let cat = event.category {
-                        Text(cat)
+                        Text(cat.capitalizedFirst)
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(brand)
                     }
@@ -287,6 +307,8 @@ struct EventMapView: View {
                         Spacer(minLength: 0)
                         // Mini avatar stack — checked-in shows who's online right
                         // now (live radar); preview shows who's bookmarked it.
+                        // Fixed height keeps the row (and card) from growing the
+                        // instant a first bookmark/attendee appears.
                         HStack(spacing: -10) {
                             let previews = isCheckedIn ? event.onlineAttendees : event.bookmarkAttendees
                             let total = isCheckedIn ? event.onlineCount : event.bookmarkCount
@@ -303,6 +325,7 @@ struct EventMapView: View {
                                     .overlay(Circle().stroke(.white, lineWidth: 2))
                             }
                         }
+                        .frame(height: 28)
                     }
                     .padding(.top, 4)
                 }
@@ -317,7 +340,7 @@ struct EventMapView: View {
                     Button { toggleBookmark(event) } label: {
                         Image(systemName: event.isBookmarked ? "heart.fill" : "heart")
                             .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(Color.coral)
+                            .foregroundStyle(Color(hex: 0xFF2829))
                             .frame(width: 44, height: 44)
                             .background(.white, in: Circle())
                             .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
@@ -412,47 +435,113 @@ private struct EventMapPin: View {
     let event: EventDTO
     var isSelected: Bool = false
     var isActive: Bool = false
+    var showLabel: Bool = true
 
-    private let teal = Color(hex: 0x1E7082)
+    @State private var pulsing = false
+    @State private var bouncing = false
+
+    // Selected and checked-in share the same enlarged, orange treatment —
+    // checked-in is told apart purely by its pulsating ring (see body).
+    private var isEmphasized: Bool { isSelected || isActive }
+    private var bodySize: CGFloat { isEmphasized ? 52 : 44 }
+    private var tailSize: CGSize { CGSize(width: bodySize * 0.34, height: bodySize * 0.3) }
+
+    private var gradientColors: [Color] {
+        isEmphasized
+            ? [Color(hex: 0xFD3D02), Color(hex: 0x851F00)]
+            : [Color(hex: 0x4FA0B0), Color(hex: 0x26565F)]
+    }
+    private var bottomColor: Color { gradientColors[1] }
+
+    // Label sits below the dot as an `.overlay`, not an in-flow VStack sibling —
+    // an overlay doesn't expand the base view's reported frame, so the dot (the
+    // VStack's real bottom edge) stays exactly what `anchor: .bottom` targets on
+    // the Annotation, regardless of the label's presence or text length.
+    private let labelGap: CGFloat = 4
+    private let labelHeight: CGFloat = 18
+    private let dotSize: CGFloat = 7
+    private let tailDotGap: CGFloat = 8
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 0) {
             ZStack {
-                // Outer pulse ring when selected or active
-                if isSelected {
+                // Pulsating ring — the one visual cue that separates checked-in
+                // from a merely-selected (tapped) pin, since both share size/color.
+                if isActive {
                     Circle()
-                        .stroke(Color.coral.opacity(0.3), lineWidth: 4)
-                        .frame(width: 62, height: 62)
+                        .stroke(bottomColor.opacity(0.5), lineWidth: 3)
+                        .frame(width: bodySize + 18, height: bodySize + 18)
+                        .scaleEffect(pulsing ? 1.25 : 0.85)
+                        .opacity(pulsing ? 0 : 0.7)
                 }
 
-                // Gradient fill — merah saat di-tap/selected, teal saat normal
+                // Tail — small pointed edge under the body, teardrop-style. White
+                // (matches the body's outline stroke) so it reads as a distinct
+                // pointer rather than blending into the gradient fill.
+                PinTail()
+                    .fill(Color.white)
+                    .frame(width: tailSize.width, height: tailSize.height)
+                    .offset(y: bodySize / 2 - 1)
+
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: isSelected
-                                ? [Color.coral, Color(red: 0.72, green: 0.14, blue: 0.14)]
-                                : [teal, Color(hex: 0x134F5C)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 48, height: 48)
+                    .fill(LinearGradient(colors: gradientColors, startPoint: .top, endPoint: .bottom))
+                    .frame(width: bodySize, height: bodySize)
                     .overlay(Circle().stroke(.white, lineWidth: 2.5))
-                    .shadow(color: (isSelected ? Color.coral : teal).opacity(0.4), radius: 8, y: 4)
 
                 Image(systemName: isActive ? "checkmark" : categoryIcon)
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(.system(size: bodySize * 0.4, weight: .semibold))
                     .foregroundStyle(.white)
             }
+            .compositingGroup()
+            .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
+            // Checked-in bob — a pure vertical offset (no x-component), so it can
+            // only ever read as up/down, never diagonal. The dot below is outside
+            // this modifier chain and never moves, since it's the real coordinate.
+            .offset(y: (isActive && bouncing) ? -6 : 0)
+            .padding(.bottom, tailDotGap)
 
+            // Exact pin point — the literal event coordinate, distinct from the
+            // larger body above it (which just carries the icon/label).
+            Circle()
+                .fill(bottomColor)
+                .frame(width: dotSize, height: dotSize)
+                .overlay(Circle().stroke(.white, lineWidth: 1.5))
+        }
+        .overlay(alignment: .bottom) {
+            // Opacity toggle (not conditional removal) keeps the pin's anchor point
+            // stable — matches Apple Maps, where the dot never shifts as labels fade.
             Text(event.name)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.primary)
-                .lineLimit(1)
+                .fixedSize()
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(.white.opacity(0.85), in: Capsule())
+                .opacity(showLabel ? 1 : 0)
+                .offset(y: labelGap + labelHeight)
         }
         .animation(.easeInOut(duration: 0.2), value: isSelected)
+        .animation(.easeInOut(duration: 0.2), value: showLabel)
+        .onAppear { updatePulse() }
+        .onChange(of: isActive) { _, _ in updatePulse() }
     }
-    
+
+    private func updatePulse() {
+        guard isActive else {
+            pulsing = false
+            bouncing = false
+            return
+        }
+        pulsing = false
+        withAnimation(.easeOut(duration: 1.4).repeatForever(autoreverses: false)) {
+            pulsing = true
+        }
+        bouncing = false
+        withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
+            bouncing = true
+        }
+    }
+
     private var categoryIcon: String {
         switch event.category?.lowercased() {
         case "concerts":    return "music.note"
@@ -461,6 +550,18 @@ private struct EventMapPin: View {
         case "communities": return "person.2.fill"
         default:            return "calendar"
         }
+    }
+}
+
+// Simple downward-pointing triangle — the pin's tail, drawn to fill its frame.
+private struct PinTail: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+        path.closeSubpath()
+        return path
     }
 }
 
@@ -729,6 +830,13 @@ private extension Date {
         let f = DateFormatter()
         f.dateFormat = "dd.MM.yyyy"
         return f.string(from: self)
+    }
+}
+
+private extension String {
+    var capitalizedFirst: String {
+        guard let first else { return self }
+        return first.uppercased() + dropFirst()
     }
 }
 

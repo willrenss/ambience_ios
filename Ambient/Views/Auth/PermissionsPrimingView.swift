@@ -7,7 +7,7 @@ struct PermissionsPrimingView: View {
     private let stepCount = 3
     
     // Theme Colors
-    let tealButton = Color(red: 0.22, green: 0.44, blue: 0.47)
+    let tealButton = Color(hex: 0x336F7A)
     let orangeColor = Color(red: 1.0, green: 0.27, blue: 0.0)
     let lightGreenHill = Color(red: 0.82, green: 0.93, blue: 0.86) // Warna bukit hijau pastel
     
@@ -94,7 +94,7 @@ struct PermissionsPrimingView: View {
                     // MARK: - Actions
                     actions
                         .padding(.horizontal, 28)
-                        .padding(.bottom, 40)
+                        .padding(.bottom, 24)
                 }
                 // Kunci juga lebar konten utamanya
                 .frame(width: geo.size.width)
@@ -293,19 +293,19 @@ extension View {
         self.font(.system(size: 18, weight: .bold))
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 20)
+            .frame(height: 54)
             .background(bg)
             .clipShape(Capsule())
             .background(
                 Capsule().fill(Color.black).offset(x: 0, y: 5)
             )
     }
-    
+
     func secondaryButtonStyle(color: Color) -> some View {
         self.font(.system(size: 18, weight: .bold))
             .foregroundColor(color)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 20)
+            .frame(height: 54)
             .background(Color.white)
             .clipShape(Capsule())
             .overlay(

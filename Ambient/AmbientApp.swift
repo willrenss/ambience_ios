@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct NowiApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var appState = AppState()
 
     init() {
@@ -20,6 +21,11 @@ struct NowiApp: App {
                 // that setting locks the OS-level chrome (keyboard, alerts) to light,
                 // this locks SwiftUI's own color scheme (e.g. in Xcode Previews).
                 .preferredColorScheme(.light)
+                .onAppear {
+                    // AppDelegate sits outside the environment, so it needs a direct
+                    // reference to reach shared state from notification callbacks.
+                    AppDelegate.appState = appState
+                }
         }
     }
 }

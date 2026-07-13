@@ -61,27 +61,32 @@ struct RadarView: View {
     }
 
     // Rotating radar sweep: a 60° semi-transparent sector with a bright leading edge.
-    @ViewBuilder
+    // Geometry is drawn once at rest (pointing north) in a local frame, then spun
+    // with `.rotationEffect` — a plain `Path` has no `animatableData`, so animating
+    // its angles directly (the old approach) just snapped once per loop instead of
+    // visibly rotating; `.rotationEffect` is what SwiftUI can actually interpolate.
     private func sweepLayer(center: CGPoint, radius: CGFloat) -> some View {
-        Path { path in
-            path.move(to: center)
-            path.addArc(center: center, radius: radius,
-                        startAngle: .degrees(sweepAngle - 60 - 90),
-                        endAngle:   .degrees(sweepAngle - 90),
-                        clockwise: false)
-            path.closeSubpath()
-        }
-        .fill(Color.terracotta.opacity(0.13))
+        let local = CGPoint(x: radius, y: radius)
+        return ZStack {
+            Path { path in
+                path.move(to: local)
+                path.addArc(center: local, radius: radius,
+                            startAngle: .degrees(-90 - 60),
+                            endAngle:   .degrees(-90),
+                            clockwise: false)
+                path.closeSubpath()
+            }
+            .fill(Color.terracotta.opacity(0.13))
 
-        let radians = (sweepAngle - 90) * Double.pi / 180
-        Path { path in
-            path.move(to: center)
-            path.addLine(to: CGPoint(
-                x: center.x + cos(radians) * radius,
-                y: center.y + sin(radians) * radius
-            ))
+            Path { path in
+                path.move(to: local)
+                path.addLine(to: CGPoint(x: local.x, y: local.y - radius))
+            }
+            .stroke(Color.terracotta.opacity(0.55), lineWidth: 1.5)
         }
-        .stroke(Color.terracotta.opacity(0.55), lineWidth: 1.5)
+        .frame(width: radius * 2, height: radius * 2)
+        .rotationEffect(.degrees(sweepAngle))
+        .position(center)
     }
 
     // Expanding pulse rings from center — same pattern as the offline Tap to Connect screen.

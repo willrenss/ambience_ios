@@ -4,6 +4,7 @@ import Foundation
 private struct ProfilePatchBody: Encodable {
     var nickname: String?
     var hometown: String?
+    var birthdate: Date?
 }
 
 @Observable
@@ -46,6 +47,17 @@ final class ProfileViewModel {
         try? await APIClient.shared.patch("/me", body: ProfilePatchBody(hometown: value))
         user?.hometown = value
         appState.currentUser?.hometown = value
+    }
+
+    // There's no separate stored "age" — picking an Age Group just sets a
+    // birthdate matching that group's representative midpoint age.
+    func updateAgeGroup(_ group: OnboardingAgeGroup) async {
+        guard let newBirthdate = Calendar.current.date(byAdding: .year, value: -group.midAge, to: .now) else { return }
+        try? await APIClient.shared.patch("/me", body: ProfilePatchBody(birthdate: newBirthdate))
+        user?.birthdate = newBirthdate
+        user?.age = group.midAge
+        appState.currentUser?.birthdate = newBirthdate
+        appState.currentUser?.age = group.midAge
     }
 
     func uploadPhoto(_ imageData: Data) async {

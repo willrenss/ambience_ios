@@ -271,6 +271,9 @@ private struct RadarCardSheet: View {
     var onPing: () -> Void
     @Environment(\.dismiss) private var dismiss
 
+    // Two lines at the interests row's 14pt font, regardless of actual content.
+    private let interestsBlockHeight: CGFloat = 40
+
     var body: some View {
         VStack(spacing: 0) {
             Capsule()
@@ -305,15 +308,20 @@ private struct RadarCardSheet: View {
             Spacer().frame(height: Spacing.sm)
 
             if let interests = user.interests, !interests.isEmpty {
+                // Reserved at a fixed 2-line height regardless of actual line
+                // count, so the status section below always starts at the same
+                // spot instead of jumping up when someone has fewer interests.
                 Text(interests.joined(separator: " • "))
                     .font(.system(size: 14))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .frame(height: interestsBlockHeight, alignment: .top)
                     .padding(.horizontal, Spacing.xxl)
             }
 
             if let status = user.status, !status.isEmpty {
-                Spacer().frame(height: Spacing.xl)
+                Spacer().frame(height: Spacing.xxxl)
                 VStack(spacing: Spacing.sm) {
                     Text("What they're up to?")
                         .font(.system(size: 17, weight: .semibold))
@@ -325,7 +333,9 @@ private struct RadarCardSheet: View {
                 }
             }
 
-            Spacer().frame(height: Spacing.xl)
+            // Flexible, not fixed — always pushes the button to the same bottom
+            // position regardless of how much bio/status content precedes it.
+            Spacer(minLength: Spacing.xl)
 
             Button {
                 onPing()
@@ -338,8 +348,7 @@ private struct RadarCardSheet: View {
             }
             .buttonStyle(PrimaryButtonStyle())
             .padding(.horizontal, Spacing.xxl)
-
-            Spacer()
+            .padding(.bottom, Spacing.xl)
         }
         .frame(maxWidth: .infinity)
     }

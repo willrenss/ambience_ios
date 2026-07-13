@@ -18,6 +18,7 @@ struct ProfileView: View {
     @State private var editName = ""
     @State private var editHometown = ""
     @State private var showInterestsPicker = false
+    @State private var showAgeGroupPicker = false
     @State private var serverURL: String = ServerConfig.currentURL
 
     var body: some View {
@@ -34,7 +35,11 @@ struct ProfileView: View {
                             editingName = true
                         }
                         Divider().padding(.leading, Spacing.lg)
-                        ProfileRow("Birthday", value: user.formattedBirthdate ?? "—")
+                        ProfileRow(
+                            "Age Group",
+                            value: user.age.map { OnboardingAgeGroup.closest(toAge: $0).generation } ?? "—",
+                            disclosure: true
+                        ) { showAgeGroupPicker = true }
                         Divider().padding(.leading, Spacing.lg)
                         ProfileRow("Hometown", value: user.hometown ?? "—") {
                             editHometown = user.hometown ?? ""
@@ -122,7 +127,7 @@ struct ProfileView: View {
                         } else {
                             Text("Sign Out")
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(Color.coral)
+                                .foregroundStyle(Color(hex: 0xFF2829))
                         }
                     }
                     .frame(maxWidth: .infinity)
@@ -130,6 +135,20 @@ struct ProfileView: View {
                     .background(.white, in: RoundedRectangle(cornerRadius: Radius.card))
                 }
                 .disabled(viewModel?.isLoading == true)
+
+                // MARK: Dev-only — full reset back through splash, walkthrough, and
+                // onboarding. There's no real in-app path back to these screens once
+                // hasSeenWalkthrough/isAuthenticated flip; RootView does the actual
+                // sign-out + flag reset once the splash is already covering the screen.
+                Button {
+                    appState.devTriggerSplash = true
+                } label: {
+                    Text("Reset to Splash & Onboarding (Dev)")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                }
 
             }
             .padding(.horizontal, Spacing.lg)
@@ -157,6 +176,13 @@ struct ProfileView: View {
             if let vm = viewModel {
                 InterestsPickerSheet(viewModel: vm)
             }
+        }
+        // Age Group picker sheet
+        .sheet(isPresented: $showAgeGroupPicker) {
+            AgeGroupPickerSheet(
+                currentGeneration: viewModel?.user?.age.map { OnboardingAgeGroup.closest(toAge: $0).generation },
+                onSelect: { group in await viewModel?.updateAgeGroup(group) }
+            )
         }
         .onAppear {
             if viewModel == nil {
@@ -383,6 +409,57 @@ private struct InterestsPickerSheet: View {
             selected = Set(viewModel.user?.interests ?? [])
         }
         .presentationDetents([.medium, .large])
+    }
+}
+
+// MARK: - Age Group Picker Sheet
+
+// Reuses AgeCard/OnboardingAgeGroup from onboarding (LoginView.swift) so this
+// picker never drifts out of sync with the original signup step.
+private struct AgeGroupPickerSheet: View {
+    let currentGeneration: String?
+    var onSelect: (OnboardingAgeGroup) async -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var isSaving = false
+
+    private let columns = [GridItem(.flexible()), GridItem(.flexible())]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: Spacing.md) {
+                    ForEach(allAgeGroups, id: \.generation) { group in
+                        AgeCard(group: group, isSelected: group.generation == currentGeneration)
+                            .frame(height: 160)
+                            .onTapGesture {
+                                guard !isSaving else { return }
+                                Task {
+                                    isSaving = true
+                                    await onSelect(group)
+                                    isSaving = false
+                                    dismiss()
+                                }
+                            }
+                    }
+                }
+                .padding(Spacing.lg)
+            }
+            .navigationTitle("Age Group")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+            .overlay {
+                if isSaving {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(.ultraThinMaterial)
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 }
 

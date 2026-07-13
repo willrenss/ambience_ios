@@ -42,24 +42,24 @@ struct OnboardingExploreSocialEventView: View {
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.black)
                             .padding(.horizontal, 28)
-                            .padding(.vertical, 16)
+                            .frame(height: 54)
                             .background(Color.white)
                             .clipShape(Capsule())
                             .background(
                                 Capsule().fill(Color.black).offset(x: 2, y: 4)
                             )
                     }
-                    
+
                     Spacer()
-                    
+
                     // Gunakan action onNext
                     Button(action: onNext) {
                         Text("Next")
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.black)
+                            .foregroundColor(.white)
                             .padding(.horizontal, 28)
-                            .padding(.vertical, 16)
-                            .background(Color(red: 0.35, green: 0.64, blue: 0.67))
+                            .frame(height: 54)
+                            .background(Color(hex: 0x336F7A))
                             .clipShape(Capsule())
                             .background(
                                 Capsule().fill(Color.black).offset(x: 2, y: 4)

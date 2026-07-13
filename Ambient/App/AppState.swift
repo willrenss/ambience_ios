@@ -16,6 +16,10 @@ final class AppState: @unchecked Sendable {
     // Programmatic tab switching — set from EventDetailView (check-in) and HomeView (check-out).
     var selectedTab: AppTab = .maps
 
+    // Dev-only: set from ProfileView to replay the real splash screen via RootView,
+    // without touching auth/onboarding state. RootView resets this back to false itself.
+    var devTriggerSplash: Bool = false
+
     // Shown once, right after account creation — gates the GPS/Bluetooth/
     // Notifications priming screens so a returning (restored-session) user
     // never sees them again.
@@ -52,6 +56,11 @@ final class AppState: @unchecked Sendable {
 
     // Set by StatusIntentView — HomeView observes and auto-connects to radar.
     var shouldAutoConnectRadar: Bool = false
+
+    // The room currently on screen, if any — set/cleared by RoomView. Lets a
+    // foreground push notification for that same room suppress its own banner
+    // instead of interrupting a chat the user is already looking at.
+    var openRoomID: UUID? = nil
 
     // The radar blip currently focused (used as the Back Tap ping target).
     var focusTargetUserID: UUID? {

@@ -541,7 +541,11 @@ final class EventDetailViewModel {
         }
     }
 
-    func joinRadar(appState: AppState) async -> Bool {
+    // Only checks radius eligibility and marks the server-side join — does NOT arm
+    // radar (appState.activeEvent) yet. Radar only arms once the context sheet is
+    // actually confirmed with "Continue" (see EventDetailView's StatusIntentView
+    // closure), so backing out of that sheet must never leave radar auto-opening.
+    func joinRadar() async -> Bool {
         guard let event else { return false }
         isJoining = true
         errorMessage = nil
@@ -563,8 +567,6 @@ final class EventDetailViewModel {
                 HapticManager.shared.play(.error)
                 return false
             }
-            appState.activeEvent = event
-            appState.activeEventID = event.id
             joined = true
             return true
         } catch {
@@ -586,6 +588,12 @@ struct EventDetailView: View {
 
     private let tealColor = Color(hex: 0x2A6B77) // Warna disesuaikan dengan tombol area mockup
 
+    // Live scroll offset, used to stretch the hero image on overscroll — Apple
+    // Music-style: pulling down at the top zooms the art in; scrolling into the
+    // content (offset > 0) leaves it untouched.
+    @State private var scrollOffsetY: CGFloat = 0
+    private var heroPullAmount: CGFloat { max(0, -scrollOffsetY) }
+
     private enum EventStatus { case upcoming, active, ended }
 
     private var eventStatus: EventStatus {
@@ -603,19 +611,21 @@ struct EventDetailView: View {
                 .ignoresSafeArea()
 
             if let event = viewModel.event {
-                // Banner Atas (Hero Image)
+                // Banner Atas (Hero Image) — grows taller on overscroll, zooming
+                // in place since it's top-anchored and scaledToFill.
                 GeometryReader { geo in
+                    let heroHeight = 380 + heroPullAmount
                     if let urlString = event.imageURL, let url = URL(string: urlString) {
                         AsyncImage(url: url) { img in
                             img.resizable()
                                .scaledToFill()
-                               .frame(width: geo.size.width, height: 380)
+                               .frame(width: geo.size.width, height: heroHeight)
                                .clipped()
                         } placeholder: {
-                            heroBgFallback.frame(width: geo.size.width, height: 380)
+                            heroBgFallback.frame(width: geo.size.width, height: heroHeight)
                         }
                     } else {
-                        heroBgFallback.frame(width: geo.size.width, height: 380)
+                        heroBgFallback.frame(width: geo.size.width, height: heroHeight)
                     }
                 }
                 .ignoresSafeArea(edges: .top)
@@ -632,9 +642,9 @@ struct EventDetailView: View {
                             
                             // === BAGIAN ATAS TIKET ===
                             VStack(alignment: .leading, spacing: 12) {
-                                Text(event.category ?? "Events")
+                                Text((event.category ?? "Events").capitalizedFirst)
                                     .font(.system(size: 14, weight: .bold))
-                                    .foregroundStyle(Color(hex: 0x1E7082))
+                                    .foregroundStyle(Color(hex: 0xD63200))
                                 
                                 Text(event.name)
                                     .font(.system(size: 26, weight: .bold))
@@ -775,6 +785,9 @@ struct EventDetailView: View {
                     }
                 }
                 .scrollIndicators(.hidden)
+                .onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.y }) { _, newValue in
+                    scrollOffsetY = newValue
+                }
             } else if !viewModel.isLoading {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -797,7 +810,7 @@ struct EventDetailView: View {
                 Button { Task { await viewModel.toggleBookmark() } } label: {
                     Image(systemName: viewModel.event?.isBookmarked == true ? "heart.fill" : "heart")
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(viewModel.event?.isBookmarked == true ? .red : .black)
+                        .foregroundStyle(viewModel.event?.isBookmarked == true ? Color(hex: 0xFF2829) : .black)
                         .frame(width: 44, height: 44)
                         .background(.white, in: Circle())
                         .shadow(color: .black.opacity(0.1), radius: 6, y: 2)
@@ -828,6 +841,12 @@ struct EventDetailView: View {
         }) {
             StatusIntentView { status in
                 try? await APIClient.shared.patch("/me", body: StatusPatchBody(status: status))
+                // Radar only arms here, once the user actually confirms context —
+                // never just from passing the "I'm in the Area" radius check.
+                if let event = viewModel.event {
+                    appState.activeEvent = event
+                    appState.activeEventID = event.id
+                }
                 statusIntentConfirmed = true
             }
             .presentationDetents([.height(340)])
@@ -866,7 +885,7 @@ struct EventDetailView: View {
                 VStack(spacing: 6) {
                     Button {
                         Task {
-                            let ok = await viewModel.joinRadar(appState: appState)
+                            let ok = await viewModel.joinRadar()
                             if ok {
                                 showStatusIntent = true
                             } else if !viewModel.radarEligible {
@@ -969,6 +988,13 @@ private extension Double {
         formatter.numberStyle = .decimal
         formatter.groupingSeparator = ","
         return formatter.string(from: NSNumber(value: self)) ?? "\(Int(self))"
+    }
+}
+
+private extension String {
+    var capitalizedFirst: String {
+        guard let first else { return self }
+        return first.uppercased() + dropFirst()
     }
 }
 

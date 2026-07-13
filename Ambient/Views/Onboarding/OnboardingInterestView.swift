@@ -15,7 +15,7 @@ struct OnboardingInterestView: View {
         GeometryReader { geo in
         VStack(spacing: 0) {
             ZStack(alignment: .bottom) {
-                Image("onBoarding1")
+                Image("Onboarding1")
                     .resizable()
                     .scaledToFill()
                     .frame(width: geo.size.width, height: geo.size.height * 0.58)
@@ -29,7 +29,7 @@ struct OnboardingInterestView: View {
 
                     Text("Now!")
                         .font(.system(size: 64, weight: .heavy, design: .default))
-                        .foregroundColor(Color(hex: 0xD63200))
+                        .foregroundColor(.white)
                         .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 2)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -59,8 +59,8 @@ struct OnboardingInterestView: View {
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 20)
-                        .background(Color(red: 0.22, green: 0.44, blue: 0.47))
+                        .frame(height: 54)
+                        .background(Color(hex: 0x336F7A))
                         .clipShape(Capsule())
                         .background(
                             Capsule()
@@ -68,7 +68,7 @@ struct OnboardingInterestView: View {
                                 .offset(x: 0, y: 5)
                         )
                 }
-                .padding(.bottom, 32)
+                .padding(.bottom, 24)
             }
             .padding(.horizontal, 32)
             .padding(.top, 30)

@@ -28,6 +28,18 @@ extension SignupRequest: Encodable {
     }
 }
 
+private struct DeviceTokenRequest: Sendable {
+    let deviceToken: String
+}
+
+extension DeviceTokenRequest: Encodable {
+    private enum CodingKeys: String, CodingKey { case deviceToken }
+    nonisolated func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(deviceToken, forKey: .deviceToken)
+    }
+}
+
 private struct LoginRequest: Sendable {
     let userID: UUID
     let secretKey: String
@@ -79,6 +91,12 @@ actor AuthService {
         let response: AuthResponse = try await APIClient.shared.post("/auth/login", body: body)
         await applySession(response)
         return UserProfile(id: response.userID, nickname: response.nickname)
+    }
+
+    // Called on every launch's successful APNs registration, not just once at
+    // signup — device tokens can rotate. Silently no-ops if not signed in yet.
+    func updateDeviceToken(_ token: String) async {
+        try? await APIClient.shared.patch("/me", body: DeviceTokenRequest(deviceToken: token))
     }
 
     func signOut() async {
