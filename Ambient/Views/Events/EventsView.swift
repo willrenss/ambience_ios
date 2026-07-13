@@ -6,10 +6,15 @@ final class EventsViewModel {
     var events: [EventDTO] = []
     var searchText: String = ""
     var selectedCategory: String? = nil
-    // Heart chip — filters "Trending Events" to bookmarked only; mutually exclusive with selectedCategory.
+    // Heart chip for SEARCH/BROWSE view — client-side filter, independent of map.
     var showBookmarkedOnly: Bool = false
     var isLoading: Bool = false
     var errorMessage: String? = nil
+
+    // ── Map bookmark filter ─────────────────────────────────────────────────
+    // Same client-side source as showBookmarkedOnly so both views stay in sync.
+    var mapBookmarkActive: Bool = false
+    var isMapBookmarkLoading: Bool = false
 
     // Disesuaikan urutannya agar sama persis dengan screenshot
     static let categories = ["Exhibitions", "Festivals", "Communities", "Concerts"]
@@ -18,10 +23,23 @@ final class EventsViewModel {
         Array(events.prefix(3))
     }
 
+    // Used by EventsView/EventSearchCover — client-side bookmark filter.
     var trending: [EventDTO] {
         if showBookmarkedOnly { return events.filter { $0.isBookmarked } }
         guard let selectedCategory else { return events }
         return events.filter { $0.category == selectedCategory }
+    }
+
+    // Used ONLY by EventMapView — same client-side source as trending so both stay in sync.
+    var mapTrending: [EventDTO] {
+        if mapBookmarkActive { return events.filter { $0.isBookmarked } }
+        guard let selectedCategory else { return events }
+        return events.filter { $0.category == selectedCategory }
+    }
+
+    func toggleMapBookmark() {
+        mapBookmarkActive.toggle()
+        if mapBookmarkActive { selectedCategory = nil }
     }
 
     var searchResults: [EventDTO] {
@@ -60,6 +78,7 @@ struct EventsView: View {
     var onDismiss: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @FocusState private var searchFocused: Bool
+    private let teal = Color(hex: 0x4FA0B0)
 
     var body: some View {
         VStack(spacing: 0) {
@@ -118,7 +137,7 @@ struct EventsView: View {
 
             categoryChips
         }
-        .padding(.top, 16)
+        .padding(.top, Spacing.sm)
         .padding(.bottom, 8)
         .background(Color(white: 0.97).ignoresSafeArea(edges: .top))
         .zIndex(1)
@@ -148,7 +167,7 @@ struct EventsView: View {
                     .submitLabel(.search)
                 
                 if viewModel.searchText.isEmpty {
-                    Image(systemName: "mic")
+                    Image(systemName: "mic.fill")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(.secondary)
                 } else {
@@ -171,7 +190,7 @@ struct EventsView: View {
 
     private var categoryChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
+            HStack(spacing: Spacing.sm) {
                 // Heart Icon — bookmarked-only filter (toggle: tap again to clear it
                 // and go back to showing everything).
                 Button {
@@ -182,7 +201,7 @@ struct EventsView: View {
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(viewModel.showBookmarkedOnly ? .white : .primary)
                         .frame(width: 38, height: 38)
-                        .background(viewModel.showBookmarkedOnly ? Color.primary : .white, in: Circle())
+                        .background(viewModel.showBookmarkedOnly ? teal : .white, in: Circle())
                         .overlay(
                             Circle().stroke(Color(white: 0.9), lineWidth: viewModel.showBookmarkedOnly ? 0 : 1)
                         )
@@ -200,7 +219,7 @@ struct EventsView: View {
                             .foregroundStyle(viewModel.selectedCategory == category ? .white : .primary)
                             .padding(.horizontal, 18)
                             .padding(.vertical, 10)
-                            .background(viewModel.selectedCategory == category ? Color.primary : .white, in: Capsule())
+                            .background(viewModel.selectedCategory == category ? teal : .white, in: Capsule())
                             .overlay(
                                 Capsule().stroke(Color(white: 0.9), lineWidth: viewModel.selectedCategory == category ? 0 : 1)
                             )
@@ -339,10 +358,6 @@ private struct PickedForYouCard: View {
             )
             .clipShape(RoundedRectangle(cornerRadius: 20))
 
-            PriceBadge(event: event)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .padding(12)
-
             VStack(alignment: .leading, spacing: 4) {
                 Spacer()
                 Text(event.name)
@@ -401,35 +416,10 @@ private struct TrendingEventRow: View {
             }
 
             Spacer(minLength: 0)
-            
-            VStack {
-                PriceBadge(event: event)
-                Spacer()
-            }
         }
         .padding(12)
         .background(.white, in: RoundedRectangle(cornerRadius: 20))
         .shadow(color: .black.opacity(0.04), radius: 10, y: 4)
-    }
-}
-
-private struct PriceBadge: View {
-    let event: EventDTO
-    
-    private let badgeColor = Color(red: 0.88, green: 0.28, blue: 0.1)
-
-    var body: some View {
-        Text(label)
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(badgeColor, in: Capsule())
-    }
-
-    private var label: String {
-        guard let price = event.hargaTiket, price > 0 else { return "Free Entry" }
-        return "From Rp\(Int(price).formattedK)"
     }
 }
 
@@ -461,15 +451,6 @@ private extension Date {
         let f = DateFormatter()
         f.dateFormat = "dd.MM.yyyy"
         return f.string(from: self)
-    }
-}
-
-private extension Int {
-    var formattedK: String {
-        if self >= 1000 {
-            return "\(self / 1000)k"
-        }
-        return "\(self)"
     }
 }
 

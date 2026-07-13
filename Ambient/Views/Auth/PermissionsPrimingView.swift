@@ -4,10 +4,10 @@ import SwiftUI
 struct PermissionsPrimingView: View {
     @Environment(AppState.self) private var appState
     @State private var step: Int = 0
-    private let stepCount = 4 // Diubah menjadi 4 untuk mengakomodasi halaman Welcome
+    private let stepCount = 3
     
     // Theme Colors
-    let tealButton = Color(red: 0.22, green: 0.44, blue: 0.47)
+    let tealButton = Color(hex: 0x336F7A)
     let orangeColor = Color(red: 1.0, green: 0.27, blue: 0.0)
     let lightGreenHill = Color(red: 0.82, green: 0.93, blue: 0.86) // Warna bukit hijau pastel
     
@@ -16,8 +16,8 @@ struct PermissionsPrimingView: View {
             ZStack {
                 Color.white.ignoresSafeArea()
                 
-                // MARK: - Green Hill Background (Khusus Halaman 4 / Welcome)
-                if step == 3 {
+                // MARK: - Green Hill Background (Khusus Halaman Welcome)
+                if step == 2 {
                     VStack {
                         Spacer()
                         Ellipse()
@@ -51,8 +51,8 @@ struct PermissionsPrimingView: View {
                     .padding(.horizontal, 24)
                     .padding(.top, 10)
                     
-                    if step < 3 {
-                        // MARK: - Title (Halaman 1 - 3)
+                    if step < 2 {
+                        // MARK: - Title (Halaman 1 - 2)
                         Text(title)
                             .font(.system(size: 50, weight: .black, design: .default))
                             .multilineTextAlignment(.center)
@@ -69,13 +69,15 @@ struct PermissionsPrimingView: View {
                         
                         Spacer()
                     } else {
-                        // MARK: - Welcome Content (Halaman 4)
+                        // MARK: - Welcome Content (Halaman 3)
                         Spacer()
                         
                         VStack(spacing: 16) {
-                            Text("Welcome")
+                            Text("Welcome, \(appState.currentUser?.nickname ?? "")!")
                                 .font(.system(size: 36, weight: .heavy, design: .default))
                                 .foregroundColor(.black)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.6)
                             
                             Text("Your profile is set up, your sensors are online, and your radar is ready to scan. Let's find some events happening near you based on your interest.")
                                 .font(.system(size: 16, weight: .regular))
@@ -92,7 +94,7 @@ struct PermissionsPrimingView: View {
                     // MARK: - Actions
                     actions
                         .padding(.horizontal, 28)
-                        .padding(.bottom, 40)
+                        .padding(.bottom, 24)
                 }
                 // Kunci juga lebar konten utamanya
                 .frame(width: geo.size.width)
@@ -193,30 +195,8 @@ struct PermissionsPrimingView: View {
                         .secondaryButtonStyle(color: tealButton)
                 }
                 
-            case 2:
-                // Panggil advance() di luar Task agar halaman langsung pindah secara instan
-                Button(action: {
-                    advance()
-
-                    // Request izin notifikasi berjalan di background
-                    Task {
-                        let granted = await NotificationPermissionPrimer.request()
-                        if granted {
-                            await MainActor.run { UIApplication.shared.registerForRemoteNotifications() }
-                        }
-                    }
-                }) {
-                    Text("Enable Notifications")
-                        .primaryButtonStyle(bg: tealButton)
-                }
-                
-                Button(action: { advance() }) {
-                    Text("Maybe Later")
-                        .secondaryButtonStyle(color: tealButton)
-                }
-                
             default:
-                // Halaman Welcome (Step 3) - Barulah panggil `finish()` untuk masuk ke app
+                // Halaman Welcome (Step 2) - panggil `finish()` untuk masuk ke app
                 Button(action: { finish() }) {
                     Text("Let's Explore Map")
                         .primaryButtonStyle(bg: tealButton)
@@ -313,19 +293,19 @@ extension View {
         self.font(.system(size: 18, weight: .bold))
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 20)
+            .frame(height: 54)
             .background(bg)
             .clipShape(Capsule())
             .background(
                 Capsule().fill(Color.black).offset(x: 0, y: 5)
             )
     }
-    
+
     func secondaryButtonStyle(color: Color) -> some View {
         self.font(.system(size: 18, weight: .bold))
             .foregroundColor(color)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 20)
+            .frame(height: 54)
             .background(Color.white)
             .clipShape(Capsule())
             .overlay(

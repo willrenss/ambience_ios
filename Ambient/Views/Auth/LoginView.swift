@@ -46,10 +46,9 @@ private struct OnboardingBottomBar: View {
     let isLoading: Bool
     let canContinue: Bool
     let isLast: Bool
-    let safeBottom: CGFloat
     let onNext: () -> Void
 
-    private let teal = Color(hex: 0x1E7082)
+    private let teal = Color(hex: 0x336F7A)
     private let totalSteps = 4
 
     var body: some View {
@@ -82,7 +81,7 @@ private struct OnboardingBottomBar: View {
                     } else {
                         Text(isLast ? "Create Account" : "Next")
                             .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(.black)
+                            .foregroundStyle(.white)
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -110,7 +109,7 @@ private struct OnboardingBottomBar: View {
             .disabled(isLoading)
             .opacity(canContinue ? 1 : 0.60)
         }
-        .padding(.bottom, max(safeBottom, 24))
+        .padding(.bottom, 24)
     }
 }
 
@@ -132,7 +131,7 @@ private struct NameStep: View {
     let bgOrange = Color(red: 1.0, green: 0.27, blue: 0.0)
     let darkOrange = Color(red: 0.82, green: 0.18, blue: 0.0) // For "Lets" and bottom hill
     let inputBg = Color(red: 0.96, green: 0.55, blue: 0.41) // Coral/Peach for textfield
-    let tealButton = Color(red: 0.22, green: 0.44, blue: 0.47)
+    let tealButton = Color(hex: 0x336F7A)
     
     var body: some View {
         ZStack {
@@ -145,20 +144,20 @@ private struct NameStep: View {
                 Spacer()
                 Ellipse()
                     .fill(darkOrange)
-                    .frame(width: UIScreen.main.bounds.width * 1, height: 350)
+                    .frame(maxWidth: .infinity, minHeight: 350, maxHeight: 350)
                     .offset(y: 150)
             }
             .ignoresSafeArea()
             
             // MARK: - Main Content
             VStack(alignment: .leading, spacing: 0) {
-                
+
                 // Typography Section
                 VStack(alignment: .leading, spacing: -5) {
                     Text("Lets")
                         .font(.system(size: 54, weight: .black, design: .default))
                         .foregroundColor(darkOrange)
-                    
+
                     Text("Get to\nKnow Each\nOther!")
                         .font(.system(size: 54, weight: .black, design: .default))
                         .foregroundColor(.white)
@@ -228,13 +227,13 @@ private struct NameStep: View {
                         if vm.isLoading {
                             ProgressView().tint(.white)
                         } else {
-                            Text("Get Started")
+                            Text("Continue")
                         }
                     }
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 20)
+                    .frame(height: 54)
                     .background(tealButton)
                     .clipShape(Capsule())
                     .background(
@@ -249,6 +248,7 @@ private struct NameStep: View {
             }
             .padding(.horizontal, 32)
         }
+        .onTapGesture { focused = false }
     }
 }
 
@@ -327,7 +327,9 @@ struct WavyStringShape: Shape {
 
 // MARK: - Step 1: Age
 
-private struct OnboardingAgeGroup {
+// Not private — ProfileView's Age Group picker reuses this data/AgeCard so the
+// two pickers (onboarding and later edits) never drift apart.
+struct OnboardingAgeGroup {
     let generation: String
     let letter: String
     let ageRange: String
@@ -342,7 +344,13 @@ private struct OnboardingAgeGroup {
     }
 }
 
-private let allAgeGroups: [OnboardingAgeGroup] = [
+extension OnboardingAgeGroup {
+    static func closest(toAge age: Int) -> OnboardingAgeGroup {
+        allAgeGroups.min { abs($0.midAge - age) < abs($1.midAge - age) } ?? allAgeGroups[0]
+    }
+}
+
+let allAgeGroups: [OnboardingAgeGroup] = [
 
     // Gen Alpha (Ungu)
     .init(
@@ -392,7 +400,7 @@ private let allAgeGroups: [OnboardingAgeGroup] = [
 private struct AgeStep: View {
     @Bindable var vm: OnboardingViewModel
     @State private var selectedIndex: Int = 1
-    @State private var scrollAnchor: Int? = 1
+    @State private var scrollAnchor: Int? = nil
 
     var body: some View {
         GeometryReader { geo in
@@ -444,6 +452,7 @@ private struct AgeStep: View {
                 }
                 .onAppear {
                     vm.ageText = String(allAgeGroups[selectedIndex].midAge)
+                    scrollAnchor = selectedIndex
                 }
 
                 Spacer()
@@ -456,18 +465,18 @@ private struct AgeStep: View {
                 OnboardingBottomBar(
                     step: 1, isLoading: vm.isLoading,
                     canContinue: vm.canContinueCurrentStep,
-                    isLast: false, safeBottom: geo.safeAreaInsets.bottom,
+                    isLast: false,
                     onNext: { Task { await vm.advance() } }
                 )
                 .padding(.horizontal, 28)
             }
         }
-        .ignoresSafeArea(edges: .bottom)
-        .background(.white)
+        .background(Color.white.ignoresSafeArea())
     }
 }
 
-private struct AgeCard: View {
+// Not private — reused by ProfileView's Age Group picker.
+struct AgeCard: View {
     let group: OnboardingAgeGroup
     let isSelected: Bool
 
@@ -476,18 +485,15 @@ private struct AgeCard: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // Card background
+            // Card background — every card shows its own brand color; only the
+            // opacity (plus the scale below) signals which one is selected.
             RoundedRectangle(cornerRadius: 20)
-                .fill(isSelected ? group.background : Color(.systemGray5))
+                .fill(group.background.opacity(isSelected ? 1 : 0.55))
 
             // Large decorative letter — clipped inside the card
             Text(group.letter)
                 .font(.system(size: 150, weight: .heavy))
-                .foregroundStyle(
-                    isSelected
-                        ? letterColor.opacity(0.50)
-                        : Color(.systemGray3).opacity(0.55)
-                )
+                .foregroundStyle(letterColor.opacity(isSelected ? 0.50 : 0.30))
                 .offset(x: 14, y: 28)
 
             // Content pinned top-leading and bottom-leading
@@ -495,7 +501,7 @@ private struct AgeCard: View {
                 // Generation prefix: "Gen", "Millennial", etc.
                 Text(group.displayPrefix)
                     .font(.system(size: 28, weight: .bold))
-                    .foregroundStyle(isSelected ? .white : Color(.systemGray2))
+                    .foregroundStyle(.white.opacity(isSelected ? 1 : 0.8))
                     .padding(.top, 20)
                     .padding(.horizontal, 20)
 
@@ -505,10 +511,10 @@ private struct AgeCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(group.ageRange)
                         .font(.system(size: 42, weight: .heavy))
-                        .foregroundStyle(isSelected ? .white : Color(.systemGray3))
+                        .foregroundStyle(.white.opacity(isSelected ? 1 : 0.8))
                     Text("YEARS OLD")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(isSelected ? .white : Color(.systemGray3))
+                        .foregroundStyle(.white.opacity(isSelected ? 1 : 0.8))
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 20)
@@ -529,7 +535,7 @@ private struct HometownStep: View {
     
     // Theme colors matching mockup
     let bgOffWhite = Color(hex: 0xF7F8FA) // Very light gray/white background
-    let tealButton = Color(red: 0.22, green: 0.44, blue: 0.47) // Button color
+    let tealButton = Color(hex: 0x336F7A) // Button color
     let orangeText = Color(red: 1.0, green: 0.27, blue: 0.0) // "Grow Up" color
 
     var body: some View {
@@ -645,7 +651,7 @@ private struct HometownStep: View {
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 20)
+                        .frame(height: 54)
                         .background(tealButton)
                         .clipShape(Capsule())
                         .background(
@@ -657,12 +663,11 @@ private struct HometownStep: View {
                     .disabled(vm.isLoading || !vm.canContinueCurrentStep)
                     .opacity(vm.canContinueCurrentStep ? 1 : 0.6)
                     .padding(.horizontal, 28)
-                    .padding(.bottom, max(geo.safeAreaInsets.bottom, 24))
+                    .padding(.bottom, 24)
                 }
             }
+            .onTapGesture { focused = false }
         }
-        .ignoresSafeArea(edges: .bottom)
-        .background(Color.white)
     }
 }
 
@@ -757,6 +762,7 @@ struct TowerShape: Shape {
 
 private struct InterestsStep: View {
     @Bindable var vm: OnboardingViewModel
+    @FocusState private var searchFocused: Bool
 
     var body: some View {
         GeometryReader { geo in
@@ -780,7 +786,29 @@ private struct InterestsStep: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 28)
-                .padding(.bottom, 20)
+                .padding(.bottom, 12)
+
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 15))
+                        .foregroundStyle(.secondary)
+                    TextField("Search interests...", text: $vm.searchText)
+                        .font(.system(size: 15))
+                        .focused($searchFocused)
+                        .autocorrectionDisabled()
+                    if !vm.searchText.isEmpty {
+                        Button { vm.searchText = "" } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 15))
+                                .foregroundStyle(Color(.tertiaryLabel))
+                        }
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .padding(.horizontal, 24)
+                .padding(.bottom, 12)
 
                 ScrollView {
                     FlowLayout(spacing: 10) {
@@ -795,6 +823,7 @@ private struct InterestsStep: View {
                     .padding(.horizontal, 24)
                     .padding(.bottom, 16)
                 }
+                .scrollDismissesKeyboard(.interactively)
 
                 if let error = vm.errorMessage {
                     Text(error).font(.caption).foregroundStyle(Color.errorRed)
@@ -804,14 +833,14 @@ private struct InterestsStep: View {
                 OnboardingBottomBar(
                     step: 3, isLoading: vm.isLoading,
                     canContinue: vm.canContinueCurrentStep,
-                    isLast: true, safeBottom: geo.safeAreaInsets.bottom,
+                    isLast: true,
                     onNext: { Task { await vm.advance() } }
                 )
                 .padding(.horizontal, 28)
             }
+            .onTapGesture { searchFocused = false }
         }
-        .ignoresSafeArea(edges: .bottom)
-        .background(.white)
+        .background(Color.white.ignoresSafeArea())
     }
 }
 
@@ -853,4 +882,6 @@ private struct OnboardingInterestChip: View {
         .animation(.spring(duration: 0.2), value: isSelected)
     }
 }
+
+
 

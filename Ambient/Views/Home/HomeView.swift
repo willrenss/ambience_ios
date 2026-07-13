@@ -108,44 +108,29 @@ struct HomeView: View {
 
     private var header: some View {
         VStack(spacing: Spacing.sm) {
-            HStack(spacing: Spacing.sm) {
-                // Back — dismiss radar without checking out
+            HStack {
+                // Back — HIG style, black icon
                 Button { onDismiss?() ?? dismiss() } label: {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(viewModel.isConnected ? Color.terracotta : .white)
-                        .frame(width: 36, height: 36)
-                        .background(.white.opacity(viewModel.isConnected ? 1 : 0.18), in: Circle())
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(Color.primary)
+                        .frame(width: 44, height: 44)
+                        .background(Color(.systemBackground).opacity(0.92), in: Circle())
+                        .shadow(color: .black.opacity(0.1), radius: 6, y: 2)
                 }
 
                 Spacer()
 
-                // Center: event name. The toast used to live in this same row — moved
-                // to its own row below so long banner text wrapping to two lines can't
-                // shift these buttons vertically anymore.
-                if let event = appState.activeEvent {
-                    Text(event.name)
-                        .font(.labelSmall)
-                        .lineLimit(1)
-                        .foregroundStyle(viewModel.isConnected ? Color.terracotta : .white)
-                        .padding(.horizontal, Spacing.md)
-                        .padding(.vertical, Spacing.sm)
-                        .background(.white.opacity(viewModel.isConnected ? 1 : 0.18), in: Capsule())
-                        .frame(maxWidth: 140)
-                }
-
-                Spacer()
-
-                // Right: notification + chat + check out
-                HStack(spacing: Spacing.xs) {
-                    // Notification bell with badge dot
+                // Right: bell + checkout — HIG style, black icons
+                HStack(spacing: Spacing.sm) {
                     Button { showNotificationLog = true } label: {
                         ZStack(alignment: .topTrailing) {
                             Image(systemName: "bell")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(viewModel.isConnected ? Color.terracotta : .white)
-                                .frame(width: 36, height: 36)
-                                .background(.white.opacity(viewModel.isConnected ? 1 : 0.18), in: Circle())
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(Color.primary)
+                                .frame(width: 44, height: 44)
+                                .background(Color(.systemBackground).opacity(0.92), in: Circle())
+                                .shadow(color: .black.opacity(0.1), radius: 6, y: 2)
                             if !viewModel.receivedPings.isEmpty || !viewModel.recentMatches.isEmpty {
                                 Circle()
                                     .fill(Color.coral)
@@ -155,38 +140,19 @@ struct HomeView: View {
                         }
                     }
 
-                    // Chat — switches to matches tab
-                    Button { appState.selectedTab = .bookmarks } label: {
-                        ZStack(alignment: .topTrailing) {
-                            Image(systemName: "bubble.left.and.bubble.right")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(viewModel.isConnected ? Color.terracotta : .white)
-                                .frame(width: 36, height: 36)
-                                .background(.white.opacity(viewModel.isConnected ? 1 : 0.18), in: Circle())
-                            if appState.hasUnseenMatches {
-                                Circle()
-                                    .fill(Color.coral)
-                                    .frame(width: 10, height: 10)
-                                    .offset(x: 2, y: -2)
-                            }
-                        }
-                    }
-
-                    // Check out
                     Button { Task { await checkout() } } label: {
                         Image(systemName: "rectangle.portrait.and.arrow.right")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(viewModel.isConnected ? Color.terracotta : .white)
-                            .frame(width: 36, height: 36)
-                            .background(.white.opacity(viewModel.isConnected ? 1 : 0.18), in: Circle())
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(Color.primary)
+                            .frame(width: 44, height: 44)
+                            .background(Color(.systemBackground).opacity(0.92), in: Circle())
+                            .shadow(color: .black.opacity(0.1), radius: 6, y: 2)
                     }
                 }
             }
+            .padding(.horizontal, Spacing.lg)
 
-            // Toast — its own row below the button row (not inline with it), so it's
-            // free to wrap to two lines (long names, long text) without shifting the
-            // buttons above. Centered, capped width so it wraps/grows down instead of
-            // stretching edge-to-edge.
+            // Toast
             if let banner = viewModel.banner {
                 HStack(spacing: 6) {
                     switch banner.kind {
@@ -218,7 +184,6 @@ struct HomeView: View {
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: viewModel.banner)
-        .padding(.horizontal, Spacing.lg)
         .padding(.top, Spacing.sm)
     }
 
@@ -227,8 +192,8 @@ struct HomeView: View {
     private var connectedContent: some View {
         ZStack(alignment: .bottom) {
             VStack(spacing: Spacing.md) {
-                // Clears the header's two rows (buttons + toast) so a showing toast doesn't overlap RadarView.
-                Spacer(minLength: 130)
+                // Space for header (44pt nav bar + optional toast row)
+                Spacer(minLength: 60)
 
                 RadarView(
                     users: viewModel.nearbyUsers,
@@ -242,8 +207,35 @@ struct HomeView: View {
                 Spacer()
             }
 
+            // Chat floating button — bottom right
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Button { appState.selectedTab = .bookmarks } label: {
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "bubble.left")
+                                .font(.system(size: 20, weight: .regular))
+                                .foregroundStyle(Color.black)
+                                .frame(width: 52, height: 52)
+                                .background(Color(.systemBackground), in: Circle())
+                                .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
+                            if appState.hasUnseenMatches {
+                                Circle()
+                                    .fill(Color.coral)
+                                    .frame(width: 10, height: 10)
+                                    .offset(x: 2, y: -2)
+                            }
+                        }
+                    }
+                    .padding(.trailing, 20)
+                    .padding(.bottom, 32)
+                }
+            }
+
             if !viewModel.receivedPings.isEmpty {
                 pingCarousel
+                    .padding(.bottom, 80)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -279,6 +271,9 @@ private struct RadarCardSheet: View {
     var onPing: () -> Void
     @Environment(\.dismiss) private var dismiss
 
+    // Two lines at the interests row's 14pt font, regardless of actual content.
+    private let interestsBlockHeight: CGFloat = 40
+
     var body: some View {
         VStack(spacing: 0) {
             Capsule()
@@ -313,15 +308,20 @@ private struct RadarCardSheet: View {
             Spacer().frame(height: Spacing.sm)
 
             if let interests = user.interests, !interests.isEmpty {
+                // Reserved at a fixed 2-line height regardless of actual line
+                // count, so the status section below always starts at the same
+                // spot instead of jumping up when someone has fewer interests.
                 Text(interests.joined(separator: " • "))
                     .font(.system(size: 14))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .frame(height: interestsBlockHeight, alignment: .top)
                     .padding(.horizontal, Spacing.xxl)
             }
 
             if let status = user.status, !status.isEmpty {
-                Spacer().frame(height: Spacing.xl)
+                Spacer().frame(height: Spacing.xxxl)
                 VStack(spacing: Spacing.sm) {
                     Text("What they're up to?")
                         .font(.system(size: 17, weight: .semibold))
@@ -333,7 +333,9 @@ private struct RadarCardSheet: View {
                 }
             }
 
-            Spacer().frame(height: Spacing.xl)
+            // Flexible, not fixed — always pushes the button to the same bottom
+            // position regardless of how much bio/status content precedes it.
+            Spacer(minLength: Spacing.xl)
 
             Button {
                 onPing()
@@ -346,8 +348,7 @@ private struct RadarCardSheet: View {
             }
             .buttonStyle(PrimaryButtonStyle())
             .padding(.horizontal, Spacing.xxl)
-
-            Spacer()
+            .padding(.bottom, Spacing.xl)
         }
         .frame(maxWidth: .infinity)
     }
@@ -515,7 +516,7 @@ private struct MatchLogRow: View {
             }
 
             VStack(alignment: .leading, spacing: 3) {
-                Text("\(room.peerNickname), \(room.peerAge)")
+                Text("\(room.peerNickname), \(NearbyUser.generation(for: room.peerAge))")
                     .font(.system(size: 15, weight: .semibold))
                 Text("You matched! Tap to open chat 💬")
                     .font(.system(size: 13))

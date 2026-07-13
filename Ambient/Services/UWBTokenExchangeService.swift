@@ -7,7 +7,7 @@ final class UWBTokenExchangeService: NSObject {
     // Called on the main thread when the peer's NI discovery token arrives.
     var onPeerTokenReceived: ((String) -> Void)?
 
-    private let serviceType = "ambient-uwb"
+    private let serviceType = "nowi-uwb"
     private var roomPrefix: String = ""
     private var localPeer: MCPeerID?
     private var mcSession: MCSession?

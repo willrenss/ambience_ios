@@ -41,5 +41,20 @@ struct RootView: View {
                 withAnimation(.easeInOut(duration: 0.4)) { showSplash = false }
             }
         }
+        .onChange(of: appState.devTriggerSplash) { _, triggered in
+            guard triggered else { return }
+            Task {
+                // Splash covers the screen first, so signing out and resetting the
+                // onboarding flags underneath never flashes the wrong screen through.
+                withAnimation(.easeInOut(duration: 0.35)) { showSplash = true }
+                await AuthService.shared.signOut()
+                appState.currentUser = nil
+                appState.hasSeenWalkthrough = false
+                appState.hasSeenPermissionsPriming = false
+                try? await Task.sleep(for: .seconds(1.6))
+                withAnimation(.easeInOut(duration: 0.4)) { showSplash = false }
+                appState.devTriggerSplash = false
+            }
+        }
     }
 }

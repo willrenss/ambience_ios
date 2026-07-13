@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct AmbientApp: App {
+struct NowiApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var appState = AppState()
 

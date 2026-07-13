@@ -68,17 +68,43 @@ struct MainTabView: View {
 private struct FloatingTabBar: View {
     @Binding var selectedTab: AppTab
 
-    private let teal = Color(hex: 0x1E7082)
+    private let selectedColor   = Color(hex: 0x336F7A)
+    private let unselectedColor = Color(hex: 0x1A1A1A)
+    private let pillColor       = Color(hex: 0xEDEDED)
+    private let barBackground   = Color(hex: 0xF7F7F7)
+    private let barBorder       = Color(hex: 0xDDDDDD)
+
+    // Fixed, equal-width slots — the sliding pill just offsets between two known
+    // positions instead of matchedGeometryEffect-ing an inserted/removed view,
+    // which occasionally snapped instead of sliding. Tap target == pill exactly.
+    private let tabWidth: CGFloat = 118
+    private let tabHeight: CGFloat = 52
 
     var body: some View {
-        HStack(spacing: 0) {
-            tabButton(tab: .maps,    icon: "map.fill",    label: "Maps")
-            tabButton(tab: .profile, icon: "person.fill", label: "Profile")
+        ZStack(alignment: .leading) {
+            Capsule()
+                .fill(pillColor)
+                .frame(width: tabWidth, height: tabHeight)
+                .offset(x: selectedTab == .maps ? 0 : tabWidth)
+
+            HStack(spacing: 0) {
+                tabButton(tab: .maps,    icon: "map",    label: "Maps")
+                tabButton(tab: .profile, icon: "person", label: "Profile")
+            }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(.white, in: Capsule())
-        .shadow(color: .black.opacity(0.12), radius: 16, y: 4)
+        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: selectedTab)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 5)
+        .glassEffect(.regular.tint(barBackground.opacity(0.7)), in: Capsule())
+        .overlay(Capsule().stroke(barBorder, lineWidth: 1))
+        .overlay(
+            Capsule()
+                .strokeBorder(
+                    LinearGradient(colors: [Color.white.opacity(0.8), .clear], startPoint: .top, endPoint: .center),
+                    lineWidth: 1
+                )
+        )
+        .shadow(color: barBorder.opacity(0.8), radius: 14, y: 6)
     }
 
     private func tabButton(tab: AppTab, icon: String, label: String) -> some View {
@@ -90,14 +116,14 @@ private struct FloatingTabBar: View {
             VStack(spacing: 4) {
                 Image(systemName: icon)
                     .font(.system(size: 22, weight: isSelected ? .semibold : .regular))
-                    .foregroundStyle(isSelected ? teal : Color(.systemGray2))
+                    .foregroundStyle(isSelected ? selectedColor : unselectedColor)
 
                 Text(label)
                     .font(.system(size: 11, weight: isSelected ? .medium : .regular))
-                    .foregroundStyle(isSelected ? teal : Color(.systemGray2))
+                    .foregroundStyle(isSelected ? selectedColor : unselectedColor)
             }
-            .padding(.horizontal, 28)
-            .padding(.vertical, 6)
+            .frame(width: tabWidth, height: tabHeight)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

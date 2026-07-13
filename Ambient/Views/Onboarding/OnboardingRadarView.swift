@@ -13,9 +13,10 @@ struct OnboardingRadarView: View {
     var onNext: () -> Void = {}
     
     var body: some View {
+        GeometryReader { geo in
         VStack(spacing: 0) {
             RadarIllustrationView()
-                .frame(height: UIScreen.main.bounds.height * 0.58)
+                .frame(height: geo.size.height * 0.58)
                 .clipShape(RoundedRectangle(cornerRadius: 60, style: .continuous))
                 .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 5)
                 .ignoresSafeArea(.all, edges: .top)
@@ -42,24 +43,24 @@ struct OnboardingRadarView: View {
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.black)
                             .padding(.horizontal, 28)
-                            .padding(.vertical, 16)
+                            .frame(height: 54)
                             .background(Color.white)
                             .clipShape(Capsule())
                             .background(
                                 Capsule().fill(Color.black).offset(x: 2, y: 4)
                             )
                     }
-                    
+
                     Spacer()
-                    
+
                     // Gunakan action onNext
                     Button(action: onNext) {
                         Text("Next")
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.black)
+                            .foregroundColor(.white)
                             .padding(.horizontal, 28)
-                            .padding(.vertical, 16)
-                            .background(Color(red: 0.35, green: 0.64, blue: 0.67))
+                            .frame(height: 54)
+                            .background(Color(hex: 0x336F7A))
                             .clipShape(Capsule())
                             .background(
                                 Capsule().fill(Color.black).offset(x: 2, y: 4)
@@ -70,6 +71,7 @@ struct OnboardingRadarView: View {
             }
             .padding(.horizontal, 32)
             .padding(.top, -33)
+        }
         }
     }
 }

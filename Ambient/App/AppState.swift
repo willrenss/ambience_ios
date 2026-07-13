@@ -16,6 +16,10 @@ final class AppState: @unchecked Sendable {
     // Programmatic tab switching — set from EventDetailView (check-in) and HomeView (check-out).
     var selectedTab: AppTab = .maps
 
+    // Dev-only: set from ProfileView to replay the real splash screen via RootView,
+    // without touching auth/onboarding state. RootView resets this back to false itself.
+    var devTriggerSplash: Bool = false
+
     // Shown once, right after account creation — gates the GPS/Bluetooth/
     // Notifications priming screens so a returning (restored-session) user
     // never sees them again.
