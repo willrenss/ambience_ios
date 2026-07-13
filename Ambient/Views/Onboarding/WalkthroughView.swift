@@ -27,7 +27,6 @@ struct WalkthroughView: View {
             )
         default:
             OnboardingRadarView(
-                onSkip: onDone,
                 onNext: onDone
             )
         }
