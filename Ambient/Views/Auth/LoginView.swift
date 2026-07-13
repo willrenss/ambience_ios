@@ -41,6 +41,8 @@ struct OnboardingView: View {
 
 // MARK: - Shared: Progress + Next Button
 
+// MARK: - Shared: Progress + Next Button
+
 private struct OnboardingBottomBar: View {
     let step: Int
     let isLoading: Bool
@@ -49,24 +51,11 @@ private struct OnboardingBottomBar: View {
     let onNext: () -> Void
 
     private let teal = Color(hex: 0x336F7A)
-    private let totalSteps = 4
 
     var body: some View {
         VStack(spacing: 14) {
-            // Two-part progress bar
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(Color(hex: 0xF2A099).opacity(0.45))
-                    .frame(height: 7)
-                GeometryReader { g in
-                    Capsule()
-                        .fill(teal)
-                        .frame(width: g.size.width * CGFloat(step + 1) / CGFloat(totalSteps), height: 7)
-                }
-                .frame(height: 7)
-            }
-            .animation(.easeInOut(duration: 0.25), value: step)
-
+            // Bagian "Two-part progress bar" (ZStack) sudah dihapus dari sini
+            
             // Next button — same 3D shadow approach as WalkthroughView
             Button {
                 UIApplication.shared.sendAction(
@@ -686,11 +675,11 @@ struct TowerShape: Shape {
 //    )
 //}
 
-//#Preview {
-//    AgeStep(
-//        vm: OnboardingViewModel(appState: AppState())
-//    )
-//}
+#Preview {
+    AgeStep(
+        vm: OnboardingViewModel(appState: AppState())
+    )
+}
 
 //#Preview {
 //    HometownStep(
@@ -698,11 +687,11 @@ struct TowerShape: Shape {
 //    )
 //}
 
-#Preview {
-    InterestsStep(
-        vm: OnboardingViewModel(appState: AppState())
-    )
-}
+//#Preview {
+//    InterestsStep(
+//        vm: OnboardingViewModel(appState: AppState())
+//    )
+//}
 
 // MARK: - Step 3: Interests
 
