@@ -121,21 +121,12 @@ struct PermissionsPrimingView: View {
             ZStack {
                 switch step {
                 case 0:
-                    // Location Illustration
-                    LocationRibbonShape()
-                        .fill(orangeColor)
-                    
-                    // Small Orange Pin
-                    MapPinView(color: orangeColor)
-                        .frame(width: 30, height: 45)
-                        .rotationEffect(.degrees(15))
-                        .position(x: geo.size.width * 0.82, y: geo.size.height * 0.35)
-                    
-                    // Big Teal Pin
-                    MapPinView(color: tealButton)
-                        .frame(width: 80, height: 120)
-                        .rotationEffect(.degrees(15))
-                        .position(x: geo.size.width * 0.55, y: geo.size.height * 0.7)
+                    ZStack(alignment: .top) {
+                        Image("EnableLocationAccess")
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: geo.size.width, height: geo.size.height * 0.58)
+                    }
                     
                 case 1:
                     // Bluetooth Illustration
@@ -196,7 +187,6 @@ struct PermissionsPrimingView: View {
                 }
                 
             default:
-                // Halaman Welcome (Step 2) - panggil `finish()` untuk masuk ke app
                 Button(action: { finish() }) {
                     Text("Let's Explore Map")
                         .primaryButtonStyle(bg: tealButton)
@@ -219,59 +209,7 @@ struct PermissionsPrimingView: View {
     }
 }
 
-// MARK: - Custom Shapes & Modifiers
 
-struct LocationRibbonShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        let w = rect.width
-        let h = rect.height
-        
-        p.move(to: CGPoint(x: 0, y: h * 0.55))
-        p.addCurve(to: CGPoint(x: w * 0.5, y: h * 0.45),
-                   control1: CGPoint(x: w * 0.25, y: h * 0.5),
-                   control2: CGPoint(x: w * 0.35, y: h * 0.45))
-        p.addCurve(to: CGPoint(x: w * 0.8, y: h * 0.35),
-                   control1: CGPoint(x: w * 0.65, y: h * 0.45),
-                   control2: CGPoint(x: w * 0.7, y: h * 0.35))
-        
-        p.addLine(to: CGPoint(x: w * 0.82, y: h * 0.35))
-        
-        p.addCurve(to: CGPoint(x: w * 0.4, y: h * 0.55),
-                   control1: CGPoint(x: w * 0.7, y: h * 0.45),
-                   control2: CGPoint(x: w * 0.6, y: h * 0.5))
-        p.addCurve(to: CGPoint(x: 0, y: h * 0.85),
-                   control1: CGPoint(x: w * 0.2, y: h * 0.6),
-                   control2: CGPoint(x: w * 0.1, y: h * 0.75))
-        
-        p.closeSubpath()
-        return p
-    }
-}
-
-struct MapPinView: View {
-    var color: Color
-    
-    var body: some View {
-        GeometryReader { geo in
-            let w = geo.size.width
-            let h = geo.size.height
-            Path { p in
-                p.move(to: CGPoint(x: w/2, y: h))
-                p.addCurve(to: CGPoint(x: 0, y: h*0.3), control1: CGPoint(x: w*0.3, y: h*0.7), control2: CGPoint(x: 0, y: h*0.5))
-                p.addArc(center: CGPoint(x: w/2, y: h*0.3), radius: w/2, startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false)
-                p.addCurve(to: CGPoint(x: w/2, y: h), control1: CGPoint(x: w, y: h*0.5), control2: CGPoint(x: w*0.7, y: h*0.7))
-            }
-            .fill(color)
-            .overlay(
-                Circle()
-                    .fill(Color.white)
-                    .frame(width: w * 0.4)
-                    .position(x: w/2, y: h*0.3)
-            )
-        }
-    }
-}
 
 struct BluetoothWaveShape: Shape {
     func path(in rect: CGRect) -> Path {
@@ -287,7 +225,6 @@ struct BluetoothWaveShape: Shape {
     }
 }
 
-// Modifier pembantu untuk styling button yang seragam
 extension View {
     func primaryButtonStyle(bg: Color) -> some View {
         self.font(.system(size: 18, weight: .bold))

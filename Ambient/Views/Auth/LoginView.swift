@@ -123,6 +123,8 @@ private let randomNicknames: [String] = [
 
 // MARK: - Step 0: Name
 
+// MARK: - Step 0: Name
+
 private struct NameStep: View {
     @Bindable var vm: OnboardingViewModel
     @FocusState private var focused: Bool
@@ -207,10 +209,11 @@ private struct NameStep: View {
                 
                 Spacer()
                 
-                // Illustration Section
-                NameCardsIllustration()
-                    .frame(height: 180)
-                    .frame(maxWidth: .infinity)
+                ZStack(alignment: .bottom) {
+                    Image("NameCard")
+                        .resizable()
+                        .scaledToFit() // <--- Ubah modifier ini dari .scaledToFill() menjadi .scaledToFit()
+                }
                 
                 Spacer()
                 
@@ -249,37 +252,6 @@ private struct NameStep: View {
             .padding(.horizontal, 32)
         }
         .onTapGesture { focused = false }
-    }
-}
-
-// MARK: - Illustration Components
-struct NameCardsIllustration: View {
-    var body: some View {
-        ZStack {
-            // Wavy White String
-            WavyStringShape()
-                .stroke(Color.white, lineWidth: 4)
-            
-            // Letter Cards
-            Group {
-                LetterCard(letter: "N", bgColor: Color(red: 0.85, green: 0.85, blue: 0.85), fgColor: Color(white: 0.65), rotation: -15)
-                    .offset(x: -105, y: 15)
-                LetterCard(letter: "A", bgColor: Color(red: 0.93, green: 0.78, blue: 0.13), fgColor: Color(red: 0.82, green: 0.65, blue: 0.05), rotation: 5)
-                    .offset(x: -30, y: 30)
-                LetterCard(letter: "E", bgColor: Color(red: 0.22, green: 0.73, blue: 0.45), fgColor: Color(red: 0.12, green: 0.58, blue: 0.32), rotation: 10)
-                    .offset(x: 95, y: 25)
-                LetterCard(letter: "M", bgColor: Color(red: 0.35, green: 0.42, blue: 0.95), fgColor: Color(red: 0.28, green: 0.33, blue: 0.85), rotation: -8)
-                    .offset(x: 35, y: 5)
-            }
-            
-            // Dark Dots
-            Group {
-                Circle().fill(Color(white: 0.3)).frame(width: 14).offset(x: -110, y: -30)
-                Circle().fill(Color(white: 0.3)).frame(width: 14).offset(x: -35, y: -18)
-                Circle().fill(Color(white: 0.3)).frame(width: 14).offset(x: 25, y: -45)
-                Circle().fill(Color(white: 0.3)).frame(width: 14).offset(x: 90, y: -28)
-            }
-        }
     }
 }
 
@@ -360,7 +332,7 @@ let allAgeGroups: [OnboardingAgeGroup] = [
         midAge: 14,
         background: Color(hex: 0x7A63D6),
         accent: Color(hex: 0x8F79E9),
-        letterColor: Color(hex: 0x5B3FB3)   // <-- lebih gelap, ungu seperti Figma
+        letterColor: Color(hex: 0x52428F)   // <-- Hue sama dengan background, brightness diturunkan
     ),
 
     // Gen Z (Merah Orange)
@@ -371,7 +343,7 @@ let allAgeGroups: [OnboardingAgeGroup] = [
         midAge: 22,
         background: Color(hex: 0xFF4D14),
         accent: Color(hex: 0xFF6535),
-        letterColor: Color(hex: 0xB53A11)   // <-- sedikit lebih gelap dari sebelumnya
+        letterColor: Color(hex: 0xB53A11)   // <-- Referensi (sudah benar)
     ),
 
     // Gen Y (Hijau)
@@ -382,7 +354,7 @@ let allAgeGroups: [OnboardingAgeGroup] = [
         midAge: 37,
         background: Color(hex: 0x71D39A),
         accent: Color(hex: 0x8AE4AF),
-        letterColor: Color(hex: 0x4F9770)   // <-- hijau tua, bukan merah
+        letterColor: Color(hex: 0x488B65)   // <-- Hue sama dengan background, brightness diturunkan
     ),
 
     // Gen X (Coklat)
@@ -393,7 +365,7 @@ let allAgeGroups: [OnboardingAgeGroup] = [
         midAge: 53,
         background: Color(hex: 0xD8A16C),
         accent: Color(hex: 0xE8BD8B),
-        letterColor: Color(hex: 0xA06D53)   // <-- coklat tua seperti Figma
+        letterColor: Color(hex: 0x936D49)   // <-- Hue sama dengan background, brightness diturunkan
     )
 ]
 
@@ -475,30 +447,20 @@ private struct AgeStep: View {
     }
 }
 
-// Not private — reused by ProfileView's Age Group picker.
 struct AgeCard: View {
     let group: OnboardingAgeGroup
     let isSelected: Bool
-
-    // Darker orange for the big decorative letter background
-    private let letterColor = Color(hex: 0xB83808)
-
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // Card background — every card shows its own brand color; only the
-            // opacity (plus the scale below) signals which one is selected.
             RoundedRectangle(cornerRadius: 20)
                 .fill(group.background.opacity(isSelected ? 1 : 0.55))
 
-            // Large decorative letter — clipped inside the card
             Text(group.letter)
                 .font(.system(size: 150, weight: .heavy))
-                .foregroundStyle(letterColor.opacity(isSelected ? 0.50 : 0.30))
+                .foregroundStyle(group.letterColor.opacity(isSelected ? 0.50 : 0.30))
                 .offset(x: 14, y: 28)
 
-            // Content pinned top-leading and bottom-leading
             VStack(alignment: .leading, spacing: 0) {
-                // Generation prefix: "Gen", "Millennial", etc.
                 Text(group.displayPrefix)
                     .font(.system(size: 28, weight: .bold))
                     .foregroundStyle(.white.opacity(isSelected ? 1 : 0.8))
@@ -507,7 +469,6 @@ struct AgeCard: View {
 
                 Spacer()
 
-                // Age range split: number on one line, label on the next
                 VStack(alignment: .leading, spacing: 2) {
                     Text(group.ageRange)
                         .font(.system(size: 42, weight: .heavy))
@@ -520,7 +481,6 @@ struct AgeCard: View {
                 .padding(.bottom, 20)
             }
         }
-        // Clip the overflowing large letter to the card bounds
         .clipShape(RoundedRectangle(cornerRadius: 20))
         .scaleEffect(isSelected ? 1 : 0.91)
         .animation(.spring(duration: 0.3), value: isSelected)
@@ -623,15 +583,6 @@ private struct HometownStep: View {
                     }
                     
                     Spacer()
-                    
-                    // Hometown illustrations: the unique Jakarta cards (No String/Dots)
-                    HometownCardsIllustration()
-                        .frame(height: 220)
-                        .frame(maxWidth: .infinity)
-                        // Negative padding to pull it under the textfield slightly if needed
-                        .padding(.top, -20)
-
-                    Spacer()
 
                     // Custom Continue Button (Neu-brutalism style to match design)
                     Button(action: {
@@ -672,29 +623,6 @@ private struct HometownStep: View {
 }
 
 // MARK: - Hometown Illustration Components
-struct HometownCardsIllustration: View {
-    var body: some View {
-        ZStack {
-            // Perspective cards: all purple with specific Jakarta text/shape
-            // Removed the wavy string and dots entirely based on the new mockup.
-            
-            Group {
-                // Far Right (Faded)
-                PerspectiveJakartaCard(label: "JAKARTA", withTower: true, rotation: 30, scale: 0.8)
-                    .offset(x: 160, y: 10)
-                    .opacity(0.8)
-                
-                // Middle Right
-                PerspectiveJakartaCard(label: "JAKARTA", withTower: true, rotation: -35, scale: 1.4)
-                    .offset(x: 40, y: 50)
-                
-                // Far Left (Cut off "RTA")
-                PerspectiveJakartaCard(label: "BANDUNG", withTower: true, rotation: -25, scale: 1.2)
-                    .offset(x: -120, y: 20)
-            }
-        }
-    }
-}
 
 struct PerspectiveJakartaCard: View {
     let label: String
@@ -752,8 +680,26 @@ struct TowerShape: Shape {
     }
 }
 
+//#Preview {
+//    NameStep(
+//        vm: OnboardingViewModel(appState: AppState())
+//    )
+//}
+
+//#Preview {
+//    AgeStep(
+//        vm: OnboardingViewModel(appState: AppState())
+//    )
+//}
+
+//#Preview {
+//    HometownStep(
+//        vm: OnboardingViewModel(appState: AppState())
+//    )
+//}
+
 #Preview {
-    HometownStep(
+    InterestsStep(
         vm: OnboardingViewModel(appState: AppState())
     )
 }
