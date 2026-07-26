@@ -407,16 +407,16 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = VTRSS39M6X;
+				DEVELOPMENT_TEAM = "$(inherited)";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Nowi;
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Nowi menggunakan Bluetooth untuk mendeteksi pengguna terdekat.";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Nowi uses Bluetooth to detect nearby users.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Camera is used to improve UWB direction accuracy when your phone isn't held upright.";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Nowi menggunakan jaringan lokal untuk terhubung ke server.";
-				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Nowi menggunakan lokasi untuk menampilkan pengguna terdekat di radar.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Nowi menggunakan lokasi untuk menampilkan pengguna terdekat di radar.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Nowi uses your local network to connect to the server.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Nowi uses your location to show nearby users on the radar.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Nowi uses your location to show nearby users on the radar.";
 				INFOPLIST_KEY_NSNearbyInteractionAllowOnceUsageDescription = "Nowi uses UWB to show your exact distance and direction to someone you matched with in the same venue.";
 				INFOPLIST_KEY_NSNearbyInteractionUsageDescription = "Nowi uses UWB to show your exact distance and direction to someone you matched with in the same venue.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -430,7 +430,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = social.co;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(inherited)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -448,16 +448,16 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = VTRSS39M6X;
+				DEVELOPMENT_TEAM = "$(inherited)";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Nowi;
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Nowi menggunakan Bluetooth untuk mendeteksi pengguna terdekat.";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Nowi uses Bluetooth to detect nearby users.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Camera is used to improve UWB direction accuracy when your phone isn't held upright.";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Nowi menggunakan jaringan lokal untuk terhubung ke server.";
-				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Nowi menggunakan lokasi untuk menampilkan pengguna terdekat di radar.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Nowi menggunakan lokasi untuk menampilkan pengguna terdekat di radar.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Nowi uses your local network to connect to the server.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Nowi uses your location to show nearby users on the radar.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Nowi uses your location to show nearby users on the radar.";
 				INFOPLIST_KEY_NSNearbyInteractionAllowOnceUsageDescription = "Nowi uses UWB to show your exact distance and direction to someone you matched with in the same venue.";
 				INFOPLIST_KEY_NSNearbyInteractionUsageDescription = "Nowi uses UWB to show your exact distance and direction to someone you matched with in the same venue.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -471,7 +471,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = social.co;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(inherited)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;

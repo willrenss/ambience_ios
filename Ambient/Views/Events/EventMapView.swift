@@ -17,6 +17,8 @@ struct EventMapView: View {
     )
     // Tracks current zoom via the map's live span — drives pin-label visibility below.
     @State private var currentSpanDelta: Double = 0.12
+    // Guards the one-time recenter-on-launch so returning to this view doesn't yank the camera back.
+    @State private var hasCenteredOnUserLocation = false
     @Environment(AppState.self) private var appState
 
     private let teal  = Color(hex: 0x1E7082)
@@ -34,40 +36,9 @@ struct EventMapView: View {
         let isPreviewShowing = (previewEvent ?? appState.activeEvent) != nil
 
         ZStack {
-            // Full-screen map
-            Map(position: $cameraPosition) {
-                UserAnnotation()
-                ForEach(viewModel.mapTrending) { event in
-                    Annotation("", coordinate: CLLocationCoordinate2D(
-                        latitude: event.latitude,
-                        longitude: event.longitude
-                    ), anchor: .bottom) {
-                        EventMapPin(
-                            event: event,
-                            isSelected: previewEvent?.id == event.id || appState.activeEvent?.id == event.id,
-                            isActive: appState.activeEvent?.id == event.id,
-                            showLabel: pinLabelsVisible
-                        )
-                        .onTapGesture {
-                            if appState.activeEvent?.id == event.id {
-                                withAnimation(.easeInOut(duration: 0.3)) {
-                                    appState.isRadarPresented = true
-                                }
-                            } else {
-                                previewEvent = event
-                            }
-                        }
-                    }
-                }
-            }
-            .mapStyle(.standard)
-            .mapControls { }
-            .ignoresSafeArea()
-            .onTapGesture { previewEvent = nil }
-            .onMapCameraChange(frequency: .continuous) { context in
-                currentSpanDelta = context.region.span.latitudeDelta
-            }
-            
+            // Extracted to its own computed property — inline, this pushed body past Swift's type-checker limit.
+            mapLayer(viewModel: viewModel, appState: appState)
+
             VStack(spacing: 0) {
                 // ── Search bar ─────────────────────────────────────────────
                 Button {
@@ -203,8 +174,8 @@ struct EventMapView: View {
 
             // Radar — same in-place ease/fade treatment as search, instead of
             // fullScreenCover's fixed slide-up-from-bottom transition.
-            if appState.isRadarPresented {
-                RadarHost(onDismiss: {
+            if appState.isRadarPresented, let active = appState.activeEvent {
+                RadarHost(event: active, onDismiss: {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         appState.isRadarPresented = false
                     }
@@ -213,15 +184,7 @@ struct EventMapView: View {
             }
         }
         .toolbar(.hidden, for: .navigationBar)
-        .fullScreenCover(item: $sheetEvent, onDismiss: {
-            // EventDetailView fully dismissed — now safe to open radar if user checked in.
-            if appState.activeEvent != nil {
-                appState.shouldAutoConnectRadar = true
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    appState.isRadarPresented = true
-                }
-            }
-        }) { e in
+        .fullScreenCover(item: $sheetEvent) { e in
             EventDetailView(eventID: e.id)
         }
         .onChange(of: appState.activeEvent) { _, event in
@@ -232,6 +195,16 @@ struct EventMapView: View {
                 previewEvent = nil
             }
         }
+        // Closes this map's own radar re-entry (no EventDetailView in that path) and resets the flag so Back keeps working on repeat use.
+        .onChange(of: appState.exitRadarToMapRequested) { _, requested in
+            guard requested else { return }
+            withAnimation(.easeInOut(duration: 0.3)) {
+                appState.isRadarPresented = false
+            }
+            sheetEvent = nil
+            appState.isSearchPresented = false
+            appState.exitRadarToMapRequested = false
+        }
         .onReceive(NotificationCenter.default.publisher(for: .eventBookmarkChanged)) { note in
             guard let updated = note.object as? EventDTO else { return }
             if previewEvent?.id == updated.id { previewEvent = updated }
@@ -239,8 +212,56 @@ struct EventMapView: View {
             viewModel.applyBookmarkUpdate(updated)
         }
         .task { await viewModel.load() }
+        .task {
+            // Same live-GPS fix as the recenter button, once per launch — replaces the fixed Jakarta fallback.
+            guard !hasCenteredOnUserLocation else { return }
+            guard let location = await LocationService.shared.awaitLocation() else { return }
+            hasCenteredOnUserLocation = true
+            cameraPosition = .region(
+                MKCoordinateRegion(
+                    center: location.coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.06, longitudeDelta: 0.06)
+                )
+            )
+        }
     }
-    
+
+    // Extracted from `body` — see the call site's comment for why.
+    private func mapLayer(viewModel: EventsViewModel, appState: AppState) -> some View {
+        Map(position: $cameraPosition) {
+            UserAnnotation()
+            ForEach(viewModel.mapTrending) { event in
+                Annotation("", coordinate: CLLocationCoordinate2D(
+                    latitude: event.latitude,
+                    longitude: event.longitude
+                ), anchor: .bottom) {
+                    EventMapPin(
+                        event: event,
+                        isSelected: previewEvent?.id == event.id || appState.activeEvent?.id == event.id,
+                        isActive: appState.activeEvent?.id == event.id,
+                        showLabel: pinLabelsVisible
+                    )
+                    .onTapGesture {
+                        if appState.activeEvent?.id == event.id {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                appState.isRadarPresented = true
+                            }
+                        } else {
+                            previewEvent = event
+                        }
+                    }
+                }
+            }
+        }
+        .mapStyle(.standard)
+        .mapControls { }
+        .ignoresSafeArea()
+        .onTapGesture { previewEvent = nil }
+        .onMapCameraChange(frequency: .continuous) { context in
+            currentSpanDelta = context.region.span.latitudeDelta
+        }
+    }
+
     // MARK: - Overlay card (unified: preview + checked-in)
     
     private func overlayCard(event: EventDTO, isCheckedIn: Bool) -> some View {
@@ -417,13 +438,15 @@ extension Notification.Name {
 
 // Isolated NavigationRouter/NavigationStack for radar, separate from mapsRouter —
 // prevents a push here from leaking a stray path value into the map's own stack.
-private struct RadarHost: View {
+// Not private — EventDetailView hosts its own instance too, so Back always returns to the right EventDetailView regardless of entry point.
+struct RadarHost: View {
     @State private var radarRouter = NavigationRouter()
+    let event: EventDTO
     var onDismiss: () -> Void
 
     var body: some View {
         NavigationStack(path: $radarRouter.path) {
-            HomeView(onDismiss: onDismiss)
+            HomeView(event: event, onDismiss: onDismiss)
         }
         .environment(radarRouter)
     }
@@ -438,12 +461,13 @@ private struct EventMapPin: View {
     var showLabel: Bool = true
 
     @State private var pulsing = false
-    @State private var bouncing = false
 
     // Selected and checked-in share the same enlarged, orange treatment —
     // checked-in is told apart purely by its pulsating ring (see body).
     private var isEmphasized: Bool { isSelected || isActive }
-    private var bodySize: CGFloat { isEmphasized ? 52 : 44 }
+    // Fixed, constant layout size — the visual size difference is expressed via scaleEffect below so MapKit's anchor never has to reproject.
+    private let bodySize: CGFloat = 52
+    private var scale: CGFloat { isEmphasized ? 1 : 44.0 / 52.0 }
     private var tailSize: CGSize { CGSize(width: bodySize * 0.34, height: bodySize * 0.3) }
 
     private var gradientColors: [Color] {
@@ -460,7 +484,9 @@ private struct EventMapPin: View {
     private let labelGap: CGFloat = 4
     private let labelHeight: CGFloat = 18
     private let dotSize: CGFloat = 7
-    private let tailDotGap: CGFloat = 8
+    private let tailDotGap: CGFloat = 0
+    // Base size at the emphasized (scale == 1) state — the outer scaleEffect derives the smaller size instead of animating font size directly.
+    private let baseIconSize: CGFloat = 52 * 0.4
 
     var body: some View {
         VStack(spacing: 0) {
@@ -489,19 +515,18 @@ private struct EventMapPin: View {
                     .overlay(Circle().stroke(.white, lineWidth: 2.5))
 
                 Image(systemName: isActive ? "checkmark" : categoryIcon)
-                    .font(.system(size: bodySize * 0.4, weight: .semibold))
+                    .font(.system(size: baseIconSize, weight: .semibold))
                     .foregroundStyle(.white)
             }
+            // Explicit frame matching the ring's max size — without it, the ZStack's implicit size shrank when the ring disappeared, causing the jump on check-in/out.
+            .frame(width: bodySize + 18, height: bodySize + 18)
             .compositingGroup()
+            // Unanimated on purpose — the pin never moves or resizes with animation; only the pulsating ring does.
+            .scaleEffect(scale, anchor: .bottom)
             .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
-            // Checked-in bob — a pure vertical offset (no x-component), so it can
-            // only ever read as up/down, never diagonal. The dot below is outside
-            // this modifier chain and never moves, since it's the real coordinate.
-            .offset(y: (isActive && bouncing) ? -6 : 0)
             .padding(.bottom, tailDotGap)
 
-            // Exact pin point — the literal event coordinate, distinct from the
-            // larger body above it (which just carries the icon/label).
+            // Exact pin point — the literal event coordinate, distinct from the larger body above it.
             Circle()
                 .fill(bottomColor)
                 .frame(width: dotSize, height: dotSize)
@@ -520,25 +545,21 @@ private struct EventMapPin: View {
                 .opacity(showLabel ? 1 : 0)
                 .offset(y: labelGap + labelHeight)
         }
-        .animation(.easeInOut(duration: 0.2), value: isSelected)
         .animation(.easeInOut(duration: 0.2), value: showLabel)
         .onAppear { updatePulse() }
         .onChange(of: isActive) { _, _ in updatePulse() }
     }
 
     private func updatePulse() {
-        guard isActive else {
+        // Forcibly disables animation for the reset, since this can land inside an ambient transaction from whatever triggered check-in/out.
+        var reset = Transaction()
+        reset.disablesAnimations = true
+        withTransaction(reset) {
             pulsing = false
-            bouncing = false
-            return
         }
-        pulsing = false
+        guard isActive else { return }
         withAnimation(.easeOut(duration: 1.4).repeatForever(autoreverses: false)) {
             pulsing = true
-        }
-        bouncing = false
-        withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
-            bouncing = true
         }
     }
 
@@ -553,13 +574,19 @@ private struct EventMapPin: View {
     }
 }
 
-// Simple downward-pointing triangle — the pin's tail, drawn to fill its frame.
+// Sides are quadratic curves, not straight lines, so the tail reads as a continuous teardrop instead of a triangle with a visible kink.
 private struct PinTail: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
         path.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.midX, y: rect.maxY),
+            control: CGPoint(x: rect.minX + rect.width * 0.1, y: rect.minY + rect.height * 0.7)
+        )
+        path.addQuadCurve(
+            to: CGPoint(x: rect.maxX, y: rect.minY),
+            control: CGPoint(x: rect.maxX - rect.width * 0.1, y: rect.minY + rect.height * 0.7)
+        )
         path.closeSubpath()
         return path
     }

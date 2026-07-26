@@ -82,10 +82,10 @@ final class HomeViewModel {
     }
 
     // Explicit "Tap to Connect" action — this is what actually arms BLE
-    // advertising/scanning, not just arriving at the Home tab.
-    func connect(appState: AppState) async {
+    // advertising/scanning, not just arriving at the Home tab. Also the one true place check-in becomes official, once BLE is actually live.
+    func connect(event: EventDTO, appState: AppState) async {
         self.appState = appState
-        guard let event = appState.activeEvent, let userID = appState.currentUser?.id else { return }
+        guard let userID = appState.currentUser?.id else { return }
         isConnecting = true
         defer { isConnecting = false }
 
@@ -98,6 +98,8 @@ final class HomeViewModel {
 
         HapticManager.shared.startEngine()
         await EventRadarService.shared.start(eventID: event.id, ownRadarToken: token, ownUserID: userID, event: event)
+        appState.activeEvent = event
+        appState.activeEventID = event.id
         isConnected = true
         subscribeStreams()
     }

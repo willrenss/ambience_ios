@@ -54,8 +54,11 @@ final class AppState: @unchecked Sendable {
     // to hide the floating tab bar while search is showing.
     var isSearchPresented: Bool = false
 
-    // Set by StatusIntentView — HomeView observes and auto-connects to radar.
-    var shouldAutoConnectRadar: Bool = false
+    // Broader than isRadarPresented — true whenever any radar view is up, so MainTabView can hide the tab bar regardless of who opened it.
+    var isRadarFlowActive: Bool = false
+
+    // Transient pulse set by HomeView's Back button while online — every layer between radar and the map observes it and closes itself.
+    var exitRadarToMapRequested: Bool = false
 
     // The room currently on screen, if any — set/cleared by RoomView. Lets a
     // foreground push notification for that same room suppress its own banner

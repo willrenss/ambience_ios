@@ -14,10 +14,11 @@ struct OnboardingRadarView: View {
         GeometryReader { geo in
             VStack(spacing: 0) {
                 ZStack(alignment: .bottom) {
+                    // Figma's 402×524 is very close to the source artwork's own ratio, so scaledToFill crops almost nothing.
                     Image("Onboarding3")
                         .resizable()
                         .scaledToFill()
-                        .frame(width: geo.size.width, height: geo.size.height * 0.58)
+                        .frame(width: geo.size.width, height: geo.size.width * (524.0 / 402.0))
                         .clipped()
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 60, style: .continuous))

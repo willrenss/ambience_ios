@@ -5,6 +5,7 @@ private struct ProfilePatchBody: Encodable {
     var nickname: String?
     var hometown: String?
     var birthdate: Date?
+    var interestIDs: [UUID]?
 }
 
 @Observable
@@ -58,6 +59,15 @@ final class ProfileViewModel {
         user?.age = group.midAge
         appState.currentUser?.birthdate = newBirthdate
         appState.currentUser?.age = group.midAge
+    }
+
+    // Replaces the user's full interest set, matching the picker's Done-saves-whatever's-checked UX.
+    func updateInterests(_ names: Set<String>) async {
+        let ids = allInterests.filter { names.contains($0.name) }.map(\.id)
+        try? await APIClient.shared.patch("/me", body: ProfilePatchBody(interestIDs: ids))
+        let updated = allInterests.filter { ids.contains($0.id) }.map(\.name)
+        user?.interests = updated
+        appState.currentUser?.interests = updated
     }
 
     func uploadPhoto(_ imageData: Data) async {
