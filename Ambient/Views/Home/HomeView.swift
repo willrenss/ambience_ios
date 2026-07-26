@@ -1,7 +1,12 @@
 import SwiftUI
 
+// Pushed onto radar's own NavigationStack instead of switching tabs, so radar → chat list → back is a real push/pop, same as chat list → room.
+struct ChatListRoute: Hashable {}
+
 struct HomeView: View {
     @State private var viewModel = HomeViewModel()
+    // Passed explicitly since appState.activeEvent isn't set until Tap to Connect succeeds.
+    let event: EventDTO
     // Override for callers without a real presentation context (e.g. in-place overlay); falls back to dismiss.
     var onDismiss: (() -> Void)? = nil
     @Environment(AppState.self) private var appState
@@ -17,7 +22,7 @@ struct HomeView: View {
                 connectedContent
             } else {
                 TapToConnectView(isConnecting: viewModel.isConnecting) {
-                    Task { await viewModel.connect(appState: appState) }
+                    Task { await viewModel.connect(event: event, appState: appState) }
                 }
                 .ignoresSafeArea()
             }
@@ -26,6 +31,9 @@ struct HomeView: View {
         }
         .navigationDestination(for: UUID.self) { roomID in
             RoomView(roomID: roomID)
+        }
+        .navigationDestination(for: ChatListRoute.self) { _ in
+            MatchesView(onBack: { router.pop() })
         }
         .onAppear {
             Task { await viewModel.start(appState: appState) }
@@ -64,19 +72,13 @@ struct HomeView: View {
                 onSelectUser: { user in pendingSelectedUser = user },
                 onSelectMatch: {
                     showNotificationLog = false
-                    appState.selectedTab = .bookmarks
+                    router.push(ChatListRoute())
                 }
             )
         }
         .onChange(of: viewModel.radarDisarmed) { _, disarmed in
             if disarmed {
                 Task { await checkout() }
-            }
-        }
-        .onChange(of: appState.shouldAutoConnectRadar) { _, should in
-            if should {
-                appState.shouldAutoConnectRadar = false
-                Task { await viewModel.connect(appState: appState) }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .mutualMatchCreated)) { note in
@@ -98,10 +100,10 @@ struct HomeView: View {
 
     // MARK: - Check Out
 
-    // leaveRadar clears appState.activeEvent — MainTabView's onChange
-    // detects this and pops the maps router back to EventMapView.
+    // Exit actually leaves the event and closes every layer back to the map — distinct from Back, which never leaves the event.
     private func checkout() async {
         await viewModel.leaveRadar(appState: appState)
+        appState.exitRadarToMapRequested = true
     }
 
     // MARK: - Header
@@ -109,8 +111,14 @@ struct HomeView: View {
     private var header: some View {
         VStack(spacing: Spacing.sm) {
             HStack {
-                // Back — HIG style, black icon
-                Button { onDismiss?() ?? dismiss() } label: {
+                // Never leaves the event — offline reveals the event page, online broadcasts back to the map.
+                Button {
+                    if viewModel.isConnected {
+                        appState.exitRadarToMapRequested = true
+                    } else {
+                        onDismiss?() ?? dismiss()
+                    }
+                } label: {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(Color.primary)
@@ -121,36 +129,38 @@ struct HomeView: View {
 
                 Spacer()
 
-                // Right: bell + checkout — HIG style, black icons
-                HStack(spacing: Spacing.sm) {
-                    Button { showNotificationLog = true } label: {
-                        ZStack(alignment: .topTrailing) {
-                            Image(systemName: "bell")
+                // Bell + checkout only make sense once actually connected.
+                if viewModel.isConnected {
+                    HStack(spacing: Spacing.sm) {
+                        Button { showNotificationLog = true } label: {
+                            ZStack(alignment: .topTrailing) {
+                                Image(systemName: "bell")
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .foregroundStyle(Color.primary)
+                                    .frame(width: 44, height: 44)
+                                    .background(Color(.systemBackground).opacity(0.92), in: Circle())
+                                    .shadow(color: .black.opacity(0.1), radius: 6, y: 2)
+                                if !viewModel.receivedPings.isEmpty || !viewModel.recentMatches.isEmpty {
+                                    Circle()
+                                        .fill(Color.coral)
+                                        .frame(width: 10, height: 10)
+                                        .offset(x: 2, y: -2)
+                                }
+                            }
+                        }
+
+                        Button { Task { await checkout() } } label: {
+                            Image(systemName: "rectangle.portrait.and.arrow.right")
                                 .font(.system(size: 17, weight: .semibold))
                                 .foregroundStyle(Color.primary)
                                 .frame(width: 44, height: 44)
                                 .background(Color(.systemBackground).opacity(0.92), in: Circle())
                                 .shadow(color: .black.opacity(0.1), radius: 6, y: 2)
-                            if !viewModel.receivedPings.isEmpty || !viewModel.recentMatches.isEmpty {
-                                Circle()
-                                    .fill(Color.coral)
-                                    .frame(width: 10, height: 10)
-                                    .offset(x: 2, y: -2)
-                            }
                         }
-                    }
-
-                    Button { Task { await checkout() } } label: {
-                        Image(systemName: "rectangle.portrait.and.arrow.right")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(Color.primary)
-                            .frame(width: 44, height: 44)
-                            .background(Color(.systemBackground).opacity(0.92), in: Circle())
-                            .shadow(color: .black.opacity(0.1), radius: 6, y: 2)
                     }
                 }
             }
-            .padding(.horizontal, Spacing.lg)
+            .padding(.horizontal, 20)
 
             // Toast
             if let banner = viewModel.banner {
@@ -184,7 +194,7 @@ struct HomeView: View {
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: viewModel.banner)
-        .padding(.top, Spacing.sm)
+        .padding(.top, 12)
     }
 
     // MARK: - Connected content
@@ -212,7 +222,7 @@ struct HomeView: View {
                 Spacer()
                 HStack {
                     Spacer()
-                    Button { appState.selectedTab = .bookmarks } label: {
+                    Button { router.push(ChatListRoute()) } label: {
                         ZStack(alignment: .topTrailing) {
                             Image(systemName: "bubble.left")
                                 .font(.system(size: 20, weight: .regular))

@@ -583,6 +583,8 @@ struct EventDetailView: View {
     @State private var showStatusIntent = false
     @State private var statusIntentConfirmed = false
     @State private var showLocationMismatch = false
+    // Owns its own radar presentation so Back always returns to this same instance regardless of entry point.
+    @State private var radarEvent: EventDTO?
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
 
@@ -605,6 +607,27 @@ struct EventDetailView: View {
     }
 
     var body: some View {
+        ZStack {
+            mainContent
+
+            // In-place overlay, not .fullScreenCover — fades in instead of sliding up like a system modal.
+            if let event = radarEvent {
+                RadarHost(event: event, onDismiss: {
+                    withAnimation(.easeInOut(duration: 0.3)) { radarEvent = nil }
+                    appState.isRadarFlowActive = false
+                })
+                .transition(.opacity)
+            }
+        }
+        .onChange(of: appState.exitRadarToMapRequested) { _, requested in
+            guard requested else { return }
+            withAnimation(.easeInOut(duration: 0.3)) { radarEvent = nil }
+            appState.isRadarFlowActive = false
+            dismiss()
+        }
+    }
+
+    private var mainContent: some View {
         ZStack(alignment: .top) {
             // Background Base Faded Gray
             Color(.systemGray6)
@@ -837,16 +860,13 @@ struct EventDetailView: View {
                 .presentationCornerRadius(24)
         }
         .sheet(isPresented: $showStatusIntent, onDismiss: {
-            if statusIntentConfirmed { dismiss() }
+            // Check-in only becomes official once Tap to Connect succeeds, in HomeViewModel.connect — not here.
+            guard statusIntentConfirmed else { return }
+            statusIntentConfirmed = false
+            openRadar()
         }) {
             StatusIntentView { status in
                 try? await APIClient.shared.patch("/me", body: StatusPatchBody(status: status))
-                // Radar only arms here, once the user actually confirms context —
-                // never just from passing the "I'm in the Area" radius check.
-                if let event = viewModel.event {
-                    appState.activeEvent = event
-                    appState.activeEventID = event.id
-                }
                 statusIntentConfirmed = true
             }
             .presentationDetents([.height(340)])
@@ -861,8 +881,16 @@ struct EventDetailView: View {
         .task(id: eventID) { await viewModel.load(id: eventID) }
     }
 
+    // MARK: - Radar
+
+    private func openRadar() {
+        guard let event = viewModel.event else { return }
+        appState.isRadarFlowActive = true
+        withAnimation(.easeInOut(duration: 0.3)) { radarEvent = event }
+    }
+
     // MARK: - Components Helper
-    
+
     private var heroBgFallback: some View {
         LinearGradient(
             colors: [Color.orange.opacity(0.6), Color.red.opacity(0.6)],
@@ -887,7 +915,12 @@ struct EventDetailView: View {
                         Task {
                             let ok = await viewModel.joinRadar()
                             if ok {
-                                showStatusIntent = true
+                                // Skip the context sheet if already online for this exact event.
+                                if appState.activeEvent?.id == viewModel.event?.id {
+                                    openRadar()
+                                } else {
+                                    showStatusIntent = true
+                                }
                             } else if !viewModel.radarEligible {
                                 showLocationMismatch = true
                             }

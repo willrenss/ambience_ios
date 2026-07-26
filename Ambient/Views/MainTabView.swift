@@ -31,16 +31,12 @@ struct MainTabView: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            // depth > 0 means we pushed into a sub-screen (e.g. RoomView);
-            // hide the tab bar so it doesn't overlay chat. Works on both tabs.
-            // Hide tab bar when inside chat (bookmarks tab), any pushed screen, or
-            // EventMapView's in-place search/radar overlays (full immersive screens,
-            // no longer fullScreenCover presentations that would hide the bar for free).
             let pushed = appState.selectedTab == .bookmarks
                       || bookmarksRouter.depth > 0
                       || mapsRouter.depth > 0
                       || appState.isSearchPresented
                       || appState.isRadarPresented
+                      || appState.isRadarFlowActive
             if !pushed {
                 FloatingTabBar(selectedTab: $appState.selectedTab)
                     .padding(.bottom, 8)

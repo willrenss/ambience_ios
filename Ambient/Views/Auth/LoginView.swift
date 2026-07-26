@@ -801,17 +801,17 @@ private struct OnboardingInterestChip: View {
 
                 Text(interest.name)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(isSelected ? .white : .black)
                     .lineLimit(1)
 
                 Image(systemName: isSelected ? "checkmark" : "plus")
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(isSelected ? .white : .black)
             }
             .padding(.leading, 4)
             .padding(.trailing, 12)
             .padding(.vertical, 6)
-            .background(isSelected ? chipSelected : chipTeal, in: Capsule())
+            .background(isSelected ? chipSelected : Color(.systemGray6), in: Capsule())
         }
         .buttonStyle(.plain)
         .animation(.spring(duration: 0.2), value: isSelected)

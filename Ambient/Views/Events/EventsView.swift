@@ -72,12 +72,17 @@ final class EventsViewModel {
     }
 }
 
+// Identifiable wrapper so an event ID can drive a .fullScreenCover(item:).
+private struct EventsSheetEvent: Identifiable { let id: UUID }
+
 struct EventsView: View {
     @Bindable var viewModel: EventsViewModel
     // Override for callers without a real presentation context (e.g. in-place overlay); falls back to dismiss.
     var onDismiss: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @FocusState private var searchFocused: Bool
+    // A cover, not a NavigationLink push — pushing here nested a NavigationStack inside another and corrupted navigation state.
+    @State private var sheetEvent: EventsSheetEvent?
     private let teal = Color(hex: 0x4FA0B0)
 
     var body: some View {
@@ -119,13 +124,13 @@ struct EventsView: View {
             }
         }
         .background(Color(white: 0.97).ignoresSafeArea())
-        .navigationDestination(for: UUID.self) { eventID in
-            EventDetailView(eventID: eventID)
-        }
         .toolbar(.hidden, for: .navigationBar)
         .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
             Button("OK") { viewModel.errorMessage = nil }
         } message: { Text(viewModel.errorMessage ?? "") }
+        .fullScreenCover(item: $sheetEvent) { e in
+            EventDetailView(eventID: e.id)
+        }
     }
 
     // MARK: - Fixed header (Search bar + Category chips)
@@ -235,7 +240,7 @@ struct EventsView: View {
     private var searchResultsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             ForEach(viewModel.searchResults) { event in
-                NavigationLink(value: event.id) {
+                Button { sheetEvent = EventsSheetEvent(id: event.id) } label: {
                     SearchSuggestionRow(event: event) // Gunakan UI khusus search sesuai gambar
                 }
                 .buttonStyle(.plain)
@@ -264,7 +269,7 @@ struct EventsView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 16) {
                         ForEach(viewModel.pickedForYou) { event in
-                            NavigationLink(value: event.id) {
+                            Button { sheetEvent = EventsSheetEvent(id: event.id) } label: {
                                 PickedForYouCard(event: event)
                             }
                             .buttonStyle(.plain)
@@ -281,7 +286,7 @@ struct EventsView: View {
     private var trendingListSection: some View {
         VStack(spacing: 16) {
             ForEach(viewModel.trending) { event in
-                NavigationLink(value: event.id) {
+                Button { sheetEvent = EventsSheetEvent(id: event.id) } label: {
                     TrendingEventRow(event: event)
                 }
                 .buttonStyle(.plain)
@@ -453,6 +458,7 @@ private extension Date {
         return f.string(from: self)
     }
 }
+
 
 #Preview("Events View") {
     NavigationStack {

@@ -36,9 +36,12 @@ struct MatchesView: View {
     @State private var viewModel: MatchesViewModel
     @Environment(NavigationRouter.self) private var router
     @Environment(AppState.self) private var appState
+    // Defaults to switching to the Maps tab; pass router.pop() when pushed from radar instead.
+    var onBack: (() -> Void)? = nil
 
-    init(viewModel: MatchesViewModel = MatchesViewModel()) {
+    init(viewModel: MatchesViewModel = MatchesViewModel(), onBack: (() -> Void)? = nil) {
         self._viewModel = State(initialValue: viewModel)
+        self.onBack = onBack
     }
 
     private let brand = Color(hex: 0xD63200)
@@ -123,7 +126,7 @@ struct MatchesView: View {
 
             // Content sits at the bottom of the header, below safe area
             HStack(spacing: 14) {
-                Button { appState.selectedTab = .maps } label: {
+                Button { onBack?() ?? (appState.selectedTab = .maps) } label: {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(brand)

@@ -395,13 +395,26 @@ private struct InterestsPickerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        // TODO: wire up PATCH /me/interests endpoint when ready
-                        dismiss()
+                    Button {
+                        guard !isSaving else { return }
+                        Task {
+                            isSaving = true
+                            await viewModel.updateInterests(selected)
+                            isSaving = false
+                            dismiss()
+                        }
+                    } label: {
+                        if isSaving {
+                            ProgressView()
+                        } else {
+                            Text("Done")
+                        }
                     }
+                    .disabled(isSaving)
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .disabled(isSaving)
                 }
             }
         }
